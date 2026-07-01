@@ -17,7 +17,7 @@ __version__ = "1.0.1"
 INFO_URL = "https://api.binance.com/api/v3/exchangeInfo"
 API_URL = "https://api.binance.com/api/v3/ticker/24hr"
 DEFAULT_VOLUME_THRESHOLD = 1_000_000.0  # $1,000,000 USD
-OUTPUT_FILE = "tradingview_watchlist.txt"
+OUTPUT_FILE = "watchlist_vol_out_1m.txt"
 
 def fetch_active_symbols():
     """Fetches set of symbols currently in TRADING status from Binance exchangeInfo."""
