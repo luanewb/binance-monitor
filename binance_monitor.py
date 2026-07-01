@@ -4,7 +4,7 @@ Binance Spot H1 Price and Volume Anomaly Monitor Bot
 Scans active USDT spot pairs on H1 timeframe, checks for > 10% price increase
 and > 3x average volume, then alerts via Telegram.
 
-Version: 2.5.4
+Version: 2.5.5
 """
 
 import asyncio
@@ -32,7 +32,7 @@ logger = logging.getLogger("BinanceMonitor")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 ALERTS_FILE = os.path.join(BASE_DIR, "alerts_history.json")
-VERSION = "2.5.4"
+VERSION = "2.5.5"
 
 # Leveraged tokens to exclude
 LEVERAGED_KEYWORDS = ["UPUSDT", "DOWNUSDT", "BULLUSDT", "BEARUSDT"]
@@ -60,7 +60,7 @@ class BinanceSpotMonitor:
                     "volume_avg_period": 20,
                     "is_running": False
                 }
-            logger.info("Configuration loaded successfully.")
+            logger.debug("Configuration loaded successfully.")
         except Exception as e:
             logger.error(f"Error loading configuration: {e}")
 
@@ -72,7 +72,7 @@ class BinanceSpotMonitor:
                 # Populate sent_alerts to avoid sending duplicates on restart
                 for alert in self.alerts_history:
                     self.sent_alerts.add((alert["symbol"], alert["candle_open_time"]))
-            logger.info(f"Loaded {len(self.alerts_history)} alert history records.")
+            logger.debug(f"Loaded {len(self.alerts_history)} alert history records.")
         except Exception as e:
             logger.error(f"Error loading alert history: {e}")
 
