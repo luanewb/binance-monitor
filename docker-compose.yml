@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  binance-monitor:
+    build: .
+    container_name: binance_monitor_dashboard
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    restart: always

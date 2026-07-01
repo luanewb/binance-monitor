@@ -1,4 +1,6 @@
 __pycache__/
 *.py[cod]
 *$py.class
-tradingview_watchlist.txt
+*.log
+*.txt
+!version.txt

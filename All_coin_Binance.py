@@ -15,7 +15,7 @@ import urllib.error
 __version__ = "1.0.2"
 
 EXCHANGE_INFO_URL = "https://api.binance.com/api/v3/exchangeInfo"
-OUTPUT_FILE = "watchlist_all_usdt.txt"
+OUTPUT_FILE = "All_coin_binance.txt"
 
 # Configuration to exclude leveraged/UP/DOWN/BULL/BEAR tokens
 EXCLUDE_LEVERAGED = True

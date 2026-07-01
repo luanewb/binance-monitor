@@ -1,0 +1,1318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Binance Spot Monitor & Watchlists Dashboard</title>
+    <!-- Google Fonts Inter & Fira Code -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #0b0e17;
+            --sidebar-color: #111522;
+            --card-color: rgba(22, 28, 45, 0.65);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-primary: #f1f3f9;
+            --text-secondary: #8e9bb3;
+            --accent-primary: #00d2ff;
+            --accent-success: #00e676;
+            --accent-warning: #ffb300;
+            --accent-error: #ff1744;
+            --accent-purple: #ab47bc;
+            --font-main: 'Inter', sans-serif;
+            --font-mono: 'Fira Code', monospace;
+            --transition-smooth: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(at 10% 20%, rgba(0, 210, 255, 0.05) 0px, transparent 50%),
+                radial-gradient(at 90% 80%, rgba(171, 71, 188, 0.05) 0px, transparent 50%);
+            background-attachment: fixed;
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            overflow-x: hidden;
+        }
+
+        /* Sidebar Styling */
+        aside {
+            width: 280px;
+            background-color: var(--sidebar-color);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding: 24px;
+            position: fixed;
+            height: 100vh;
+            z-index: 10;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 40px;
+            padding: 0 8px;
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-purple));
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(0, 210, 255, 0.3);
+        }
+
+        .logo-text {
+            font-weight: 700;
+            font-size: 1.15rem;
+            letter-spacing: 0.5px;
+            background: linear-gradient(to right, #ffffff, var(--text-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .version-badge {
+            font-size: 0.75rem;
+            color: var(--accent-primary);
+            background: rgba(0, 210, 255, 0.1);
+            padding: 2px 8px;
+            border-radius: 12px;
+            border: 1px solid rgba(0, 210, 255, 0.2);
+            margin-left: auto;
+        }
+
+        nav {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex-grow: 1;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            border: 1px solid transparent;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            color: var(--text-primary);
+            background-color: rgba(255, 255, 255, 0.03);
+            border-color: rgba(255, 255, 255, 0.05);
+        }
+
+        .nav-item.active {
+            background: linear-gradient(90deg, rgba(0, 210, 255, 0.1) 0%, rgba(255, 255, 255, 0.01) 100%);
+            border-left: 3px solid var(--accent-primary);
+            color: #fff;
+        }
+
+        .nav-item svg {
+            width: 20px;
+            height: 20px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+        }
+
+        .sidebar-footer {
+            margin-top: auto;
+            border-top: 1px solid var(--border-color);
+            padding-top: 20px;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        /* Main Content Layout */
+        main {
+            margin-left: 280px;
+            flex-grow: 1;
+            padding: 40px;
+            max-width: 1400px;
+        }
+
+        .view-section {
+            display: none;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        .view-section.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .page-header {
+            margin-bottom: 32px;
+        }
+
+        .page-title {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .page-subtitle {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        /* Dashboard Overview Statistics Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        .stats-card {
+            background-color: var(--card-color);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+
+        .stats-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--accent-primary);
+        }
+
+        .stats-card.running::after { background: var(--accent-success); }
+        .stats-card.stopped::after { background: var(--accent-error); }
+        .stats-card.purple::after { background: var(--accent-purple); }
+
+        .stats-header {
+            display: flex;
+            justify-content: space-between;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stats-val {
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: -1px;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: var(--text-secondary);
+        }
+
+        .status-dot.active {
+            background-color: var(--accent-success);
+            box-shadow: 0 0 10px var(--accent-success);
+            animation: pulse 1.8s infinite;
+        }
+
+        .status-dot.inactive {
+            background-color: var(--accent-error);
+            box-shadow: 0 0 10px var(--accent-error);
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(0, 230, 118, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 230, 118, 0); }
+        }
+
+        /* Configuration Grid Layout */
+        .content-grid {
+            display: grid;
+            grid-template-columns: 3fr 2fr;
+            gap: 32px;
+            margin-bottom: 32px;
+        }
+
+        @media (max-width: 1024px) {
+            .content-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel-card {
+            background-color: var(--card-color);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+            margin-bottom: 32px;
+        }
+
+        .panel-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 24px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Inputs & Forms styling */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        input, select {
+            width: 100%;
+            background-color: rgba(0, 0, 0, 0.25);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 16px;
+            color: var(--text-primary);
+            font-family: var(--font-main);
+            font-size: 0.95rem;
+            transition: var(--transition-smooth);
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 8px rgba(0, 210, 255, 0.2);
+        }
+
+        .help-text {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        /* Buttons Styling */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            border: 1px solid transparent;
+            font-family: var(--font-main);
+        }
+
+        .btn-primary {
+            background-color: var(--accent-primary);
+            color: #0b0e17;
+            box-shadow: 0 4px 15px rgba(0, 210, 255, 0.2);
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(0, 210, 255, 0.3);
+        }
+
+        .btn-success {
+            background-color: var(--accent-success);
+            color: #0b0e17;
+            box-shadow: 0 4px 15px rgba(0, 230, 118, 0.2);
+        }
+
+        .btn-success:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .btn-error {
+            background-color: var(--accent-error);
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(255, 23, 68, 0.2);
+        }
+
+        .btn-error:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .btn-outline {
+            background-color: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .btn-outline:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .btn-sm {
+            padding: 8px 16px;
+            font-size: 0.85rem;
+            border-radius: 8px;
+        }
+
+        .btn-icon-only {
+            padding: 8px;
+            border-radius: 8px;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        /* Console/Terminal Window styling */
+        .terminal-container {
+            border-radius: 12px;
+            background-color: #05070c;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.8);
+        }
+
+        .terminal-header {
+            background-color: rgba(255,255,255,0.02);
+            border-bottom: 1px solid var(--border-color);
+            padding: 8px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .terminal-dots {
+            display: flex;
+            gap: 6px;
+        }
+
+        .terminal-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        .td-red { background-color: #ff5f56; }
+        .td-yellow { background-color: #ffbd2e; }
+        .td-green { background-color: #27c93f; }
+
+        .terminal-title {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .terminal-content {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: #d1d5db;
+            padding: 16px;
+            height: 380px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+
+        /* Watchlists Sub-Bots Grid */
+        .scripts-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+
+        .script-row-card {
+            background-color: var(--card-color);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+            transition: var(--transition-smooth);
+        }
+
+        .script-row-card:hover {
+            border-color: rgba(255,255,255,0.12);
+            background-color: rgba(26, 32, 52, 0.8);
+        }
+
+        .script-info {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .script-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .script-desc {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .script-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .script-meta span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .script-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        /* Interactive table for Alert Logs */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+            font-size: 0.95rem;
+        }
+
+        th {
+            text-align: left;
+            padding: 16px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 16px;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            color: var(--text-primary);
+        }
+
+        tr:hover td {
+            background-color: rgba(255,255,255,0.01);
+        }
+
+        .badge {
+            display: inline-flex;
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .badge-success {
+            background-color: rgba(0, 230, 118, 0.1);
+            color: var(--accent-success);
+            border: 1px solid rgba(0, 230, 118, 0.2);
+        }
+
+        .badge-error {
+            background-color: rgba(255, 23, 68, 0.1);
+            color: var(--accent-error);
+            border: 1px solid rgba(255, 23, 68, 0.2);
+        }
+
+        .badge-info {
+            background-color: rgba(0, 210, 255, 0.1);
+            color: var(--accent-primary);
+            border: 1px solid rgba(0, 210, 255, 0.2);
+        }
+
+        /* Modal text file viewer */
+        .viewer-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-top: 32px;
+        }
+
+        @media (max-width: 1024px) {
+            .viewer-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .viewer-box {
+            background-color: rgba(0,0,0,0.3);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .viewer-title {
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .viewer-content {
+            background-color: #05070c;
+            border-radius: 8px;
+            padding: 16px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background-color: var(--sidebar-color);
+            border: 1px solid var(--accent-primary);
+            border-radius: 10px;
+            padding: 16px 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 999;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background-color: rgba(0, 210, 255, 0.1);
+            color: var(--accent-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .toast-body {
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar Navigation -->
+    <aside>
+        <div class="logo">
+            <div class="logo-icon">B</div>
+            <div class="logo-text">Binance Watch</div>
+            <span class="version-badge" id="version-badge">v2.5.1</span>
+        </div>
+        
+        <nav>
+            <div class="nav-item active" onclick="switchView('monitor-view', this)">
+                <svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7"></path></svg>
+                Spot Monitor Bot
+            </div>
+            <div class="nav-item" onclick="switchView('scripts-view', this)">
+                <svg viewBox="0 0 24 24"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6M12 2v20"></path></svg>
+                Watchlist Bots
+            </div>
+            <div class="nav-item" onclick="switchView('history-view', this)">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                Alert History
+            </div>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div>Status: <span id="sidebar-status-text">Checking...</span></div>
+            <div>Alerts Triggered: <span id="sidebar-alerts-count">0</span></div>
+            <div style="font-size: 0.7rem; color: #5c6b84;">OS: Windows System</div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main>
+        
+        <!-- View 1: Spot Monitor Bot Control & Config -->
+        <section id="monitor-view" class="view-section active">
+            <div class="page-header">
+                <h1 class="page-title">Binance Spot H1 Anomaly Monitor</h1>
+                <p class="page-subtitle">Tracks all USDT coin pairs in real-time, alerts on >10% Price Increase and >3x Volume spikes.</p>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="stats-grid">
+                <div class="stats-card" id="bot-status-card">
+                    <div class="stats-header">Bot Status</div>
+                    <div class="stats-val">
+                        <div class="status-badge">
+                            <div class="status-dot" id="status-dot"></div>
+                            <span id="bot-status-label">Loading...</span>
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-success btn-sm" id="btn-start" onclick="controlBot('start')">Start Bot</button>
+                        <button class="btn btn-error btn-sm" id="btn-stop" onclick="controlBot('stop')">Stop Bot</button>
+                    </div>
+                </div>
+
+                <div class="stats-card purple">
+                    <div class="stats-header">Alert History Total</div>
+                    <div class="stats-val" id="stats-alerts-count">0</div>
+                    <div style="color: var(--text-secondary); font-size: 0.85rem;">Lifetime triggers captured</div>
+                </div>
+
+                <div class="stats-card">
+                    <div class="stats-header">Timeframe & Frequency</div>
+                    <div class="stats-val" id="stats-frequency">H1</div>
+                    <div style="color: var(--text-secondary); font-size: 0.85rem;">Interval: <span id="stats-interval-lbl">300s</span></div>
+                </div>
+            </div>
+
+            <div class="content-grid">
+                <!-- Config Card -->
+                <div class="panel-card">
+                    <h2 class="panel-title">Telegram & Threshold Configuration</h2>
+                    <form id="config-form" onsubmit="saveConfig(event)">
+                        <div class="form-group">
+                            <label for="telegram_token">Telegram Bot Token</label>
+                            <input type="password" id="telegram_token" autocomplete="off" placeholder="Enter Telegram Bot Token (bot123456...)">
+                            <div class="help-text">Obtain from @BotFather on Telegram.</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="telegram_chat_id">Telegram Chat ID / Group ID</label>
+                            <input type="text" id="telegram_chat_id" placeholder="Enter Telegram Chat or Group ID (e.g. -100...)">
+                            <div class="help-text">Can be a personal Chat ID or Group ID.</div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="price_threshold_pct">Price Spike Threshold (%)</label>
+                                <input type="number" id="price_threshold_pct" step="0.1" value="10.0">
+                                <div class="help-text">Trigger alert if price rises above this %.</div>
+                            </div>
+                            <div class="form-group">
+                                <label for="volume_multiplier">Volume Multiplier (x)</label>
+                                <input type="number" id="volume_multiplier" step="0.1" value="3.0">
+                                <div class="help-text">Trigger if H1 volume is X times the average.</div>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="scan_interval_sec">Scan Interval (seconds)</label>
+                                <input type="number" id="scan_interval_sec" value="300" min="60">
+                                <div class="help-text">Time between API scan loops.</div>
+                            </div>
+                            <div class="form-group">
+                                <label for="volume_avg_period">Volume Average Period (Hours)</label>
+                                <input type="number" id="volume_avg_period" value="20" min="5" max="100">
+                                <div class="help-text">Number of H1 candles to calculate average volume.</div>
+                            </div>
+                        </div>
+
+                        <div class="btn-group">
+                            <button type="submit" class="btn btn-primary">Save Settings</button>
+                            <button type="button" class="btn btn-outline" onclick="testTelegram()">Test Connection</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Bot Live Logs -->
+                <div class="panel-card" style="margin-bottom:0;">
+                    <div class="panel-title">
+                        Live Monitor Logs
+                        <button class="btn btn-outline btn-sm btn-icon-only" onclick="fetchLogs('monitor')" title="Refresh Logs">
+                            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                        </button>
+                    </div>
+                    <div class="terminal-container">
+                        <div class="terminal-header">
+                            <div class="terminal-dots">
+                                <div class="terminal-dot td-red"></div>
+                                <div class="terminal-dot td-yellow"></div>
+                                <div class="terminal-dot td-green"></div>
+                            </div>
+                            <div class="terminal-title">binance_monitor.log</div>
+                        </div>
+                        <div class="terminal-content" id="log-monitor">Loading logs...</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- View 2: Watchlist Bots (Existing Scripts) -->
+        <section id="scripts-view" class="view-section">
+            <div class="page-header">
+                <h1 class="page-title">Existing Watchlist Bots</h1>
+                <p class="page-subtitle">Run and manage your existing watchlists generator scripts, preview watchlists, and download txt files.</p>
+            </div>
+
+            <div class="scripts-grid">
+                <!-- Bot 1: 1M Vol Watchlist -->
+                <div class="script-row-card" id="card-1m_vol_watchlist">
+                    <div class="script-info">
+                        <h3 class="script-title">1m_vol_watchlist.py</h3>
+                        <p class="script-desc">Generates a TradingView watchlist containing Binance Spot USDT pairs with 24h volume >= $1,000,000 USD.</p>
+                        <div class="script-meta">
+                            <span>Status: <b id="status-1m_vol_watchlist">Idle</b></span>
+                            <span>Last Run: <span id="lastrun-1m_vol_watchlist">Never</span></span>
+                        </div>
+                    </div>
+                    <div class="script-actions">
+                        <button class="btn btn-outline btn-sm" onclick="viewWatchlist('1m_vol_watchlist')">Preview TXT</button>
+                        <a href="/api/watchlist/download/1m_vol_watchlist" class="btn btn-outline btn-sm" id="dl-1m_vol_watchlist" style="display:none;">Download</a>
+                        <button class="btn btn-primary btn-sm" id="run-1m_vol_watchlist" onclick="runScript('1m_vol_watchlist')">Run Bot</button>
+                    </div>
+                </div>
+
+                <!-- Bot 2: All Coin Binance -->
+                <div class="script-row-card" id="card-All_coin_Binance">
+                    <div class="script-info">
+                        <h3 class="script-title">All_coin_Binance.py</h3>
+                        <p class="script-desc">Generates a TradingView watchlist containing all active Binance Spot USDT trading pairs.</p>
+                        <div class="script-meta">
+                            <span>Status: <b id="status-All_coin_Binance">Idle</b></span>
+                            <span>Last Run: <span id="lastrun-All_coin_Binance">Never</span></span>
+                        </div>
+                    </div>
+                    <div class="script-actions">
+                        <button class="btn btn-outline btn-sm" onclick="viewWatchlist('All_coin_Binance')">Preview TXT</button>
+                        <a href="/api/watchlist/download/All_coin_Binance" class="btn btn-outline btn-sm" id="dl-All_coin_Binance" style="display:none;">Download</a>
+                        <button class="btn btn-primary btn-sm" id="run-All_coin_Binance" onclick="runScript('All_coin_Binance')">Run Bot</button>
+                    </div>
+                </div>
+
+                <!-- Bot 3: Future Binance -->
+                <div class="script-row-card" id="card-Future_Binance">
+                    <div class="script-info">
+                        <h3 class="script-title">Future_Binance.py</h3>
+                        <p class="script-desc">Generates a TradingView watchlist containing active Binance USDT Perpetual Futures contracts.</p>
+                        <div class="script-meta">
+                            <span>Status: <b id="status-Future_Binance">Idle</b></span>
+                            <span>Last Run: <span id="lastrun-Future_Binance">Never</span></span>
+                        </div>
+                    </div>
+                    <div class="script-actions">
+                        <button class="btn btn-outline btn-sm" onclick="viewWatchlist('Future_Binance')">Preview TXT</button>
+                        <a href="/api/watchlist/download/Future_Binance" class="btn btn-outline btn-sm" id="dl-Future_Binance" style="display:none;">Download</a>
+                        <button class="btn btn-primary btn-sm" id="run-Future_Binance" onclick="runScript('Future_Binance')">Run Bot</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Terminal output and text preview grid -->
+            <div class="viewer-container" id="viewer-container" style="display:none;">
+                <!-- Script output logs -->
+                <div class="viewer-box">
+                    <h3 class="viewer-title" id="script-log-title">Console Output</h3>
+                    <div class="terminal-container">
+                        <div class="terminal-header">
+                            <div class="terminal-dots">
+                                <div class="terminal-dot td-red"></div>
+                                <div class="terminal-dot td-yellow"></div>
+                                <div class="terminal-dot td-green"></div>
+                            </div>
+                            <div class="terminal-title" id="script-log-file-title">script_run.log</div>
+                        </div>
+                        <div class="terminal-content" id="script-log-content">No logs loaded.</div>
+                    </div>
+                </div>
+
+                <!-- Watchlist Text Viewer -->
+                <div class="viewer-box">
+                    <h3 class="viewer-title">
+                        Watchlist Content Preview
+                        <button class="btn btn-outline btn-sm" id="btn-download-preview" onclick="downloadPreviewFile()">Download TXT</button>
+                    </h3>
+                    <div class="viewer-content" id="watchlist-content-box">Select a watchlist to preview.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- View 3: Alert History Logs -->
+        <section id="history-view" class="view-section">
+            <div class="page-header" style="display:flex; justify-content:space-between; align-items:flex-end;">
+                <div>
+                    <h1 class="page-title">Price & Volume Alert History</h1>
+                    <p class="page-subtitle">Logs of historical spikes triggered by the Binance Spot Monitor Bot.</p>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-outline btn-sm" onclick="fetchAlerts()">Refresh</button>
+                    <button class="btn btn-error btn-sm" onclick="clearAlerts()">Clear Logs</button>
+                </div>
+            </div>
+
+            <div class="panel-card" style="padding:0; overflow-x:auto;">
+                <table id="alerts-table">
+                    <thead>
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Time (UTC)</th>
+                            <th>Price Change</th>
+                            <th>Current Price</th>
+                            <th>H1 Volume</th>
+                            <th>Volume Multiplier</th>
+                            <th>Telegram Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="alerts-tbody">
+                        <tr>
+                            <td colspan="7" style="text-align:center; padding:32px; color:var(--text-secondary);">No alerts recorded. Ensure the bot is running.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast">
+        <div class="toast-icon">✓</div>
+        <div class="toast-body" id="toast-message">Notification message here</div>
+    </div>
+
+    <!-- Scripting for UI and API interactions -->
+    <script>
+        let currentActiveScript = null;
+        let logsIntervalId = null;
+
+        // Switch dashboard tabs
+        function switchView(viewId, element) {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(viewId).classList.add('active');
+            element.classList.add('active');
+
+            if (viewId === 'history-view') {
+                fetchAlerts();
+            } else if (viewId === 'monitor-view') {
+                fetchLogs('monitor');
+            }
+        }
+
+        // Show toast notification
+        function showToast(message, isSuccess = true) {
+            const toast = document.getElementById('toast');
+            const icon = toast.querySelector('.toast-icon');
+            icon.innerText = isSuccess ? '✓' : '✗';
+            icon.style.color = isSuccess ? 'var(--accent-success)' : 'var(--accent-error)';
+            icon.style.backgroundColor = isSuccess ? 'rgba(0, 230, 118, 0.1)' : 'rgba(255, 23, 68, 0.1)';
+            toast.style.borderColor = isSuccess ? 'var(--accent-success)' : 'var(--accent-error)';
+            
+            document.getElementById('toast-message').innerText = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // Fetch overall status from API
+        async function fetchStatus() {
+            try {
+                const res = await fetch('/api/status');
+                if (!res.ok) return;
+                const data = await res.json();
+                
+                // Update Spot Bot Status Card
+                const statusDot = document.getElementById('status-dot');
+                const statusLabel = document.getElementById('bot-status-label');
+                const botCard = document.getElementById('bot-status-card');
+                const btnStart = document.getElementById('btn-start');
+                const btnStop = document.getElementById('btn-stop');
+
+                if (data.monitor_running) {
+                    statusDot.className = 'status-dot active';
+                    statusLabel.innerText = 'Running';
+                    botCard.className = 'stats-card running';
+                    btnStart.disabled = true;
+                    btnStop.disabled = false;
+                    document.getElementById('sidebar-status-text').innerText = 'Bot Running';
+                    document.getElementById('sidebar-status-text').style.color = 'var(--accent-success)';
+                } else {
+                    statusDot.className = 'status-dot inactive';
+                    statusLabel.innerText = 'Stopped';
+                    botCard.className = 'stats-card stopped';
+                    btnStart.disabled = false;
+                    btnStop.disabled = true;
+                    document.getElementById('sidebar-status-text').innerText = 'Bot Stopped';
+                    document.getElementById('sidebar-status-text').style.color = 'var(--accent-error)';
+                }
+
+                // Update counts
+                document.getElementById('stats-alerts-count').innerText = data.alerts_count;
+                document.getElementById('sidebar-alerts-count').innerText = data.alerts_count;
+                document.getElementById('version-badge').innerText = 'v' + data.version;
+
+                // Update existing script bot list status
+                for (const [name, scriptInfo] of Object.entries(data.scripts)) {
+                    const statusB = document.getElementById(`status-${name}`);
+                    const lastRunS = document.getElementById(`lastrun-${name}`);
+                    const runBtn = document.getElementById(`run-${name}`);
+                    const dlBtn = document.getElementById(`dl-${name}`);
+                    const rowCard = document.getElementById(`card-${name}`);
+
+                    statusB.innerText = scriptInfo.status.toUpperCase();
+                    if (scriptInfo.status === 'running') {
+                        statusB.style.color = 'var(--accent-success)';
+                        runBtn.disabled = true;
+                        runBtn.innerText = 'Running...';
+                        rowCard.style.borderColor = 'rgba(0, 230, 118, 0.3)';
+                    } else {
+                        statusB.style.color = 'var(--text-secondary)';
+                        runBtn.disabled = false;
+                        runBtn.innerText = 'Run Bot';
+                        rowCard.style.borderColor = 'var(--border-color)';
+                    }
+
+                    if (scriptInfo.last_run) {
+                        lastRunS.innerText = scriptInfo.last_run;
+                    }
+
+                    if (scriptInfo.has_output) {
+                        dlBtn.style.display = 'inline-flex';
+                    } else {
+                        dlBtn.style.display = 'none';
+                    }
+                }
+            } catch (err) {
+                console.error("Error fetching status:", err);
+            }
+        }
+
+        // Control Monitor Bot (Start/Stop)
+        async function controlBot(action) {
+            try {
+                const res = await fetch(`/api/bot/${action}`, { method: 'POST' });
+                if (res.ok) {
+                    showToast(`Spot Monitor Bot has been ${action}ed.`);
+                    fetchStatus();
+                    setTimeout(() => fetchLogs('monitor'), 500);
+                } else {
+                    showToast(`Failed to ${action} bot.`, false);
+                }
+            } catch (err) {
+                showToast("Connection error.", false);
+            }
+        }
+
+        // Fetch logs for monitor or script
+        async function fetchLogs(name) {
+            try {
+                const res = await fetch(`/api/logs/${name}`);
+                if (!res.ok) return;
+                const data = await res.json();
+                
+                if (name === 'monitor') {
+                    const logContent = document.getElementById('log-monitor');
+                    logContent.innerText = data.logs;
+                    logContent.scrollTop = logContent.scrollHeight;
+                } else {
+                    const logContent = document.getElementById('script-log-content');
+                    logContent.innerText = data.logs;
+                    logContent.scrollTop = logContent.scrollHeight;
+                }
+            } catch (err) {
+                console.error("Error fetching logs:", err);
+            }
+        }
+
+        // Fetch Configuration
+        async function fetchConfig() {
+            try {
+                const res = await fetch('/api/config');
+                if (!res.ok) return;
+                const config = await res.json();
+
+                document.getElementById('telegram_token').value = config.telegram_token || '';
+                document.getElementById('telegram_chat_id').value = config.telegram_chat_id || '';
+                document.getElementById('price_threshold_pct').value = config.price_threshold_pct;
+                document.getElementById('volume_multiplier').value = config.volume_multiplier;
+                document.getElementById('scan_interval_sec').value = config.scan_interval_sec;
+                document.getElementById('volume_avg_period').value = config.volume_avg_period;
+
+                document.getElementById('stats-interval-lbl').innerText = config.scan_interval_sec + 's';
+            } catch (err) {
+                console.error("Error loading config:", err);
+            }
+        }
+
+        // Save Configuration
+        async function saveConfig(event) {
+            event.preventDefault();
+            
+            const payload = {
+                telegram_token: document.getElementById('telegram_token').value.trim(),
+                telegram_chat_id: document.getElementById('telegram_chat_id').value.trim(),
+                price_threshold_pct: parseFloat(document.getElementById('price_threshold_pct').value),
+                volume_multiplier: parseFloat(document.getElementById('volume_multiplier').value),
+                scan_interval_sec: parseInt(document.getElementById('scan_interval_sec').value),
+                volume_avg_period: parseInt(document.getElementById('volume_avg_period').value)
+            };
+
+            try {
+                const res = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (res.ok) {
+                    showToast("Configuration saved successfully.");
+                    fetchConfig();
+                } else {
+                    const data = await res.json();
+                    showToast(data.detail || "Failed to save configuration.", false);
+                }
+            } catch (err) {
+                showToast("Connection error.", false);
+            }
+        }
+
+        // Test Telegram Connection
+        async function testTelegram() {
+            showToast("Sending test alert...");
+            try {
+                const res = await fetch('/api/bot/test', { method: 'POST' });
+                if (res.ok) {
+                    showToast("Test notification sent successfully!");
+                } else {
+                    const data = await res.json();
+                    showToast(data.detail || "Failed to send test alert.", false);
+                }
+            } catch (err) {
+                showToast("Connection error.", false);
+            }
+        }
+
+        // Run Watchlist Script
+        async function runScript(name) {
+            try {
+                const res = await fetch(`/api/run_script/${name}`, { method: 'POST' });
+                if (res.ok) {
+                    showToast(`Started script: ${name}.py`);
+                    fetchStatus();
+                    
+                    // Automatically show the viewer section and start polling logs
+                    currentActiveScript = name;
+                    document.getElementById('viewer-container').style.display = 'grid';
+                    document.getElementById('script-log-title').innerText = `Logs: ${name}.py`;
+                    document.getElementById('script-log-file-title').innerText = `${name}_run.log`;
+                    
+                    // Scroll to viewer
+                    document.getElementById('viewer-container').scrollIntoView({ behavior: 'smooth' });
+
+                    if (logsIntervalId) clearInterval(logsIntervalId);
+                    logsIntervalId = setInterval(() => {
+                        fetchLogs(name);
+                        // Stop interval once status returns to idle
+                        const statusB = document.getElementById(`status-${name}`).innerText;
+                        if (statusB === 'IDLE') {
+                            clearInterval(logsIntervalId);
+                            // Load watchlist text once completed
+                            viewWatchlist(name);
+                        }
+                    }, 1000);
+                } else {
+                    const data = await res.json();
+                    showToast(data.detail || `Failed to run script.`, false);
+                }
+            } catch (err) {
+                showToast("Connection error.", false);
+            }
+        }
+
+        // View Watchlist text file
+        async function viewWatchlist(name) {
+            currentActiveScript = name;
+            document.getElementById('viewer-container').style.display = 'grid';
+            document.getElementById('script-log-title').innerText = `Logs: ${name}.py`;
+            document.getElementById('script-log-file-title').innerText = `${name}_run.log`;
+            
+            fetchLogs(name);
+
+            const contentBox = document.getElementById('watchlist-content-box');
+            contentBox.innerText = "Loading watchlist...";
+            
+            try {
+                const res = await fetch(`/api/watchlist/${name}`);
+                if (res.status === 200) {
+                    const data = await res.json();
+                    contentBox.innerText = data.content;
+                } else {
+                    contentBox.innerText = "No watchlist text file generated yet. Run the script bot to create it.";
+                }
+            } catch (err) {
+                contentBox.innerText = "Error loading watchlist content.";
+            }
+
+            document.getElementById('viewer-container').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Download currently viewed watchlist file
+        function downloadPreviewFile() {
+            if (!currentActiveScript) {
+                showToast("Please select a watchlist first.", false);
+                return;
+            }
+            window.location.href = `/api/watchlist/download/${currentActiveScript}`;
+        }
+
+        // Fetch Anomaly Alerts
+        async function fetchAlerts() {
+            try {
+                const res = await fetch('/api/alerts');
+                if (!res.ok) return;
+                const alerts = await res.json();
+
+                const tbody = document.getElementById('alerts-tbody');
+                tbody.innerHTML = '';
+
+                if (alerts.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="7" style="text-align:center; padding:32px; color:var(--text-secondary);">No alerts recorded. Ensure the bot is running.</td>
+                        </tr>`;
+                    return;
+                }
+
+                alerts.forEach(alert => {
+                    const tr = document.createElement('tr');
+                    const telBadgeClass = alert.telegram_sent ? 'badge-success' : 'badge-error';
+                    const telBadgeText = alert.telegram_sent ? 'Sent' : 'Failed';
+                    
+                    tr.innerHTML = `
+                        <td><b>#${alert.symbol}</b></td>
+                        <td style="color:var(--text-secondary);">${alert.timestamp}</td>
+                        <td style="color:var(--accent-success); font-weight:600;">+${alert.price_change.toFixed(2)}%</td>
+                        <td>${alert.current_price.toLocaleString()} USDT</td>
+                        <td>${alert.volume.toLocaleString(undefined, {maximumFractionDigits: 2})} USDT</td>
+                        <td>🔥 <b>${alert.volume_ratio.toFixed(2)}x</b></td>
+                        <td><span class="badge ${telBadgeClass}">${telBadgeText}</span></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (err) {
+                console.error("Error loading alerts:", err);
+            }
+        }
+
+        // Clear All Anomaly Alerts
+        async function clearAlerts() {
+            if (!confirm("Are you sure you want to clear all alert logs from history?")) return;
+            try {
+                const res = await fetch('/api/alerts/clear', { method: 'POST' });
+                if (res.ok) {
+                    showToast("Alert history cleared.");
+                    fetchAlerts();
+                    fetchStatus();
+                } else {
+                    showToast("Failed to clear alert history.", false);
+                }
+            } catch (err) {
+                showToast("Connection error.", false);
+            }
+        }
+
+        // Init and periodic polling
+        window.addEventListener('load', () => {
+            fetchStatus();
+            fetchConfig();
+            fetchLogs('monitor');
+
+            // Poll bot and script statuses every 4 seconds
+            setInterval(fetchStatus, 4000);
+            
+            // Poll monitor log every 8 seconds
+            setInterval(() => {
+                if (document.getElementById('monitor-view').classList.contains('active')) {
+                    fetchLogs('monitor');
+                }
+            }, 8000);
+        });
+    </script>
+</body>
+</html>

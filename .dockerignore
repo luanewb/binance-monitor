@@ -1,0 +1,14 @@
+.git
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.vscode/
+.idea/
+*.log
+*.txt
+!requirements.txt
+!version.txt
+alerts_history.json
+run_dashboard.bat
