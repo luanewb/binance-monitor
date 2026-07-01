@@ -4,7 +4,7 @@ Bin Spot Monitor & Watchlist Web Dashboard
 Provides a web interface to control the Binance Spot H1 anomaly detector
 and run/manage the 3 existing watchlist scripts.
 
-Version: 2.5.5
+Version: 2.5.6
 """
 
 import asyncio
@@ -12,6 +12,8 @@ import json
 import os
 import sys
 import logging
+import time
+import aiohttp
 from datetime import datetime
 from typing import Optional
 from fastapi import FastAPI, BackgroundTasks, HTTPException
@@ -26,7 +28,7 @@ from binance_monitor import BinanceSpotMonitor, CONFIG_FILE, ALERTS_FILE
 # Logger Setup
 logger = logging.getLogger("Dashboard")
 
-app = FastAPI(title="Binance Spot Monitor Dashboard", version="2.5.5")
+app = FastAPI(title="Binance Spot Monitor Dashboard", version="2.5.6")
 
 # Bot Instance
 monitor_instance = BinanceSpotMonitor()
@@ -116,7 +118,203 @@ async def get_index():
             return HTMLResponse(content=f.read())
     return HTMLResponse(content="<h1>Dashboard HTML template not found.</h1>", status_code=404)
 
+# CoinCap/CoinGecko Market Cap Cache
+COINCAP_CACHE = {
+    "data": {},
+    "last_fetched": 0
+}
+
+async def fetch_coincap_marketcaps():
+    now = time.time()
+    # Cache for 5 minutes (300 seconds)
+    if now - COINCAP_CACHE["last_fetched"] < 300 and COINCAP_CACHE["data"]:
+        return COINCAP_CACHE["data"]
+    
+    # Try CoinGecko first (since it is reachable on user's network)
+    try:
+        url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=10) as resp:
+                if resp.status == 200:
+                    res_json = await resp.json()
+                    new_data = {}
+                    for asset in res_json:
+                        sym = asset.get("symbol", "").upper()
+                        try:
+                            mcap = float(asset.get("market_cap") or 0)
+                        except:
+                            mcap = 0.0
+                        new_data[sym] = mcap
+                    COINCAP_CACHE["data"] = new_data
+                    COINCAP_CACHE["last_fetched"] = now
+                    logger.info("Fetched CoinGecko market cap data successfully.")
+                    return COINCAP_CACHE["data"]
+                else:
+                    logger.warning(f"CoinGecko API returned status {resp.status}. Trying CoinCap fallback...")
+    except Exception as e:
+        logger.warning(f"Error fetching CoinGecko market caps: {e}. Trying CoinCap fallback...")
+        
+    # Fallback to CoinCap
+    try:
+        url = "https://api.coincap.io/v2/assets?limit=2000"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=10) as resp:
+                if resp.status == 200:
+                    res_json = await resp.json()
+                    new_data = {}
+                    for asset in res_json.get("data", []):
+                        sym = asset.get("symbol", "").upper()
+                        try:
+                            mcap = float(asset.get("marketCapUsd") or 0)
+                        except:
+                            mcap = 0.0
+                        new_data[sym] = mcap
+                    COINCAP_CACHE["data"] = new_data
+                    COINCAP_CACHE["last_fetched"] = now
+                    logger.info("Fetched CoinCap market cap data successfully as fallback.")
+                else:
+                    logger.error(f"Failed to fetch CoinCap data fallback: status {resp.status}")
+    except Exception as e:
+        logger.error(f"Error fetching CoinCap market caps fallback: {e}")
+        
+    return COINCAP_CACHE["data"]
+
 # REST APIs
+
+@app.get("/api/top_gainers")
+async def get_top_gainers():
+    try:
+        # 1. Fetch market cap data from CoinCap cache
+        market_caps = await fetch_coincap_marketcaps()
+        
+        # 2. Fetch 24h ticker info from Binance
+        binance_url = "https://api.binance.com/api/v3/ticker/24hr"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(binance_url, timeout=15) as resp:
+                if resp.status != 200:
+                    raise HTTPException(status_code=500, detail=f"Failed to fetch data from Binance: status {resp.status}")
+                tickers = await resp.json()
+        
+        # 3. Filter USDT pairs and exclude leveraged pairs
+        leveraged_keywords = ["UPUSDT", "DOWNUSDT", "BULLUSDT", "BEARUSDT"]
+        valid_tickers = []
+        for t in tickers:
+            symbol = t.get("symbol", "")
+            if symbol.endswith("USDT") and not any(kw in symbol for kw in leveraged_keywords):
+                # Clean symbol like LDOUSDT -> LDO to map with CoinCap
+                base_symbol = symbol[:-4]
+                try:
+                    price_change_pct = float(t.get("priceChangePercent", 0.0))
+                    last_price = float(t.get("lastPrice", 0.0))
+                    quote_volume = float(t.get("quoteVolume", 0.0))
+                except (ValueError, TypeError):
+                    continue
+                
+                mcap = market_caps.get(base_symbol, 0.0)
+                
+                valid_tickers.append({
+                    "symbol": symbol,
+                    "base_symbol": base_symbol,
+                    "price_change_pct": price_change_pct,
+                    "last_price": last_price,
+                    "quote_volume": quote_volume,
+                    "market_cap": mcap
+                })
+        
+        # 4. Sort by price_change_pct descending and pick top 20
+        valid_tickers.sort(key=lambda x: x["price_change_pct"], reverse=True)
+        top_20 = valid_tickers[:20]
+        
+        return top_20
+    except Exception as e:
+        logger.error(f"Error getting top gainers: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/explain_gainer/{symbol}")
+async def explain_gainer(symbol: str):
+    # Read API key from local ignored file or environment variable
+    gemini_key = ""
+    key_file = os.path.join(BASE_DIR, "gemini_key.txt")
+    if os.path.exists(key_file):
+        try:
+            with open(key_file, "r", encoding="utf-8") as f:
+                gemini_key = f.read().strip()
+        except Exception as e:
+            logger.error(f"Error reading gemini_key.txt: {e}")
+            
+    if not gemini_key:
+        gemini_key = os.environ.get("GEMINI_API_KEY", "")
+        
+    if not gemini_key:
+        raise HTTPException(status_code=500, detail="Gemini API Key is not configured. Please create gemini_key.txt.")
+    
+    # We clean the symbol if needed (e.g. SOLUSDT -> SOL)
+    base_symbol = symbol.replace("USDT", "")
+    
+    # Constructing prompt
+    prompt = (
+        f"Hãy phân tích và giải thích chi tiết lý do tại sao đồng tiền mã hóa {base_symbol} "
+        f"(giao dịch trên sàn Binance Spot với cặp {symbol}) đang tăng giá mạnh trong 24 giờ qua.\n"
+        f"Sử dụng công cụ Google Search được tích hợp để tìm kiếm và tổng hợp các tin tức mới nhất, "
+        f"sự kiện vĩ mô, nâng cấp kỹ thuật, các mối quan hệ đối tác, listing sàn giao dịch mới, "
+        f"hoặc bất kỳ thông tin on-chain nào nổi bật liên quan đến {base_symbol}.\n"
+        f"Yêu cầu:\n"
+        f"1. Trình bày hoàn toàn bằng tiếng Việt.\n"
+        f"2. Trả lời súc tích, khách quan, đi thẳng vào nguyên nhân chính xác của đợt tăng giá này.\n"
+        f"3. Định dạng câu trả lời bằng Markdown đẹp mắt với tiêu đề rõ ràng, các gạch đầu dòng và in đậm những thông tin then chốt.\n"
+        f"4. Trích dẫn nguồn thông tin hoặc thời gian diễn ra tin tức nếu có."
+    )
+    
+    gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_key}"
+    
+    payload = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [
+                    {
+                        "text": prompt
+                    }
+                ]
+            }
+        ],
+        "tools": [
+            {
+                "googleSearch": {}
+            }
+        ]
+    }
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(gemini_url, json=payload, timeout=30) as resp:
+                if resp.status != 200:
+                    error_text = await resp.text()
+                    logger.error(f"Gemini API returned status {resp.status}: {error_text}")
+                    raise HTTPException(status_code=500, detail=f"Gemini API error: {resp.status}")
+                
+                res_json = await resp.json()
+                
+                # Extract text response from Gemini structure
+                try:
+                    candidates = res_json.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        if parts:
+                            analysis_text = parts[0].get("text", "")
+                            return {"analysis": analysis_text}
+                    
+                    raise ValueError("Empty or invalid structure in Gemini response")
+                except Exception as ex:
+                    logger.error(f"Error parsing Gemini response: {ex}. Response JSON: {res_json}")
+                    raise HTTPException(status_code=500, detail="Failed to parse analysis response from AI.")
+                    
+    except Exception as e:
+        logger.error(f"Error explaining gainer {symbol}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/status")
 async def get_status():
@@ -135,7 +333,7 @@ async def get_status():
             for k, v in script_processes.items()
         },
         "alerts_count": len(monitor_instance.alerts_history),
-        "version": "2.5.5"
+        "version": "2.5.6"
     }
 
 @app.get("/api/config")

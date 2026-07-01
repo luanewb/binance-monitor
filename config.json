@@ -6,5 +6,5 @@
   "scan_interval_sec": 3600,
   "volume_avg_period": 20,
   "min_24h_volume": 1000000.0,
-  "is_running": false
+  "is_running": true
 }

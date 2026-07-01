@@ -9,6 +9,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
+    <!-- Marked.js Markdown Parser -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
     <style>
         :root {
             --bg-color: #0b0e17;
@@ -676,6 +679,45 @@
             font-size: 0.95rem;
             font-weight: 500;
         }
+
+        /* AI Analysis Markdown styles */
+        #ai-analysis-container h1, #ai-analysis-container h2, #ai-analysis-container h3 {
+            color: #fff;
+            margin-top: 18px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        #ai-analysis-container h1 { font-size: 1.4rem; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; }
+        #ai-analysis-container h2 { font-size: 1.25rem; }
+        #ai-analysis-container h3 { font-size: 1.1rem; }
+        #ai-analysis-container p {
+            margin-bottom: 12px;
+            color: #d1d5db;
+            line-height: 1.6;
+        }
+        #ai-analysis-container ul, #ai-analysis-container ol {
+            margin-left: 20px;
+            margin-bottom: 16px;
+            color: #d1d5db;
+        }
+        #ai-analysis-container li {
+            margin-bottom: 6px;
+        }
+        #ai-analysis-container strong {
+            color: var(--accent-primary);
+        }
+        #ai-analysis-container hr {
+            border: 0;
+            border-top: 1px solid var(--border-color);
+            margin: 16px 0;
+        }
+        #ai-analysis-container blockquote {
+            border-left: 3px solid var(--accent-primary);
+            padding-left: 12px;
+            margin-left: 0;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -696,6 +738,10 @@
             <div class="nav-item" onclick="switchView('scripts-view', this)">
                 <svg viewBox="0 0 24 24"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6M12 2v20"></path></svg>
                 Watchlist Bots
+            </div>
+            <div class="nav-item" onclick="switchView('gainers-view', this)">
+                <svg viewBox="0 0 24 24"><path d="M23 6l-9.5 9.5-5-5L1 18"></path><path d="M17 6h6v6"></path></svg>
+                Top 20 Gainers
             </div>
             <div class="nav-item" onclick="switchView('history-view', this)">
                 <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
@@ -956,6 +1002,59 @@
             </div>
         </section>
 
+        <!-- View 4: Top 20 Gainers & AI Analysis -->
+        <section id="gainers-view" class="view-section">
+            <div class="page-header" style="display:flex; justify-content:space-between; align-items:flex-end;">
+                <div>
+                    <h1 class="page-title">Top 20 Gainers (Binance Spot)</h1>
+                    <p class="page-subtitle">20 coin tăng giá mạnh nhất trên sàn Binance Spot trong 24 giờ qua và phân tích lý do tăng từ AI.</p>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-primary btn-sm" onclick="fetchTopGainers()">Refresh</button>
+                </div>
+            </div>
+
+            <div class="content-grid" style="grid-template-columns: 3fr 2fr;">
+                <!-- Table Panel -->
+                <div class="panel-card" style="padding:0; overflow-x:auto; margin-bottom: 0;">
+                    <table id="gainers-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px;">Rank</th>
+                                <th>Symbol</th>
+                                <th>Price</th>
+                                <th>24h Change</th>
+                                <th>24h Volume</th>
+                                <th>Market Cap</th>
+                                <th style="text-align: center;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="gainers-tbody">
+                            <tr>
+                                <td colspan="7" style="text-align:center; padding:32px; color:var(--text-secondary);">Loading top gainers...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- AI Panel -->
+                <div class="panel-card" style="margin-bottom: 0; display: flex; flex-direction: column;">
+                    <div class="panel-title">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 1.2rem;">✨</span> AI Market Analysis
+                        </div>
+                        <span id="ai-coin-badge" class="badge badge-info" style="display: none;">SOLUSDT</span>
+                    </div>
+                    <div id="ai-analysis-container" style="flex-grow: 1; min-height: 380px; max-height: 600px; overflow-y: auto; padding: 4px; line-height: 1.6; font-size: 0.95rem;">
+                        <div style="color: var(--text-secondary); text-align: center; padding-top: 80px;">
+                            <p style="font-size: 1.5rem; margin-bottom: 12px;">🤖</p>
+                            Chọn một đồng coin ở bảng bên trái và click <b>"AI Explain"</b> để phân tích lý do tăng giá bằng Gemini AI.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
     </main>
 
     <!-- Toast Notification -->
@@ -981,6 +1080,8 @@
                 fetchAlerts();
             } else if (viewId === 'monitor-view') {
                 fetchLogs('monitor');
+            } else if (viewId === 'gainers-view') {
+                fetchTopGainers();
             }
         }
 
@@ -1306,6 +1407,109 @@
                 }
             } catch (err) {
                 showToast("Connection error.", false);
+            }
+        }
+
+        // Fetch Top 20 Binance Spot Gainers
+        async function fetchTopGainers() {
+            const tbody = document.getElementById('gainers-tbody');
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:32px; color:var(--text-secondary);">Loading top gainers from Binance...</td></tr>`;
+            try {
+                const res = await fetch('/api/top_gainers');
+                if (!res.ok) {
+                    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:32px; color:var(--accent-error);">Failed to fetch top gainers.</td></tr>`;
+                    return;
+                }
+                const data = await res.json();
+                tbody.innerHTML = '';
+                
+                if (data.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:32px; color:var(--text-secondary);">No data found.</td></tr>`;
+                    return;
+                }
+
+                // Formatters
+                const volumeFormatter = new Intl.NumberFormat('en-US', { notation: "compact", compactDisplay: "short" });
+
+                data.forEach((coin, idx) => {
+                    const tr = document.createElement('tr');
+                    
+                    const mcapText = coin.market_cap > 0 ? '$' + volumeFormatter.format(coin.market_cap) : 'N/A';
+                    const volText = '$' + volumeFormatter.format(coin.quote_volume);
+                    
+                    // Display precision based on price scale
+                    let priceText = coin.last_price;
+                    if (priceText < 0.001) {
+                        priceText = priceText.toFixed(8);
+                    } else if (priceText < 1) {
+                        priceText = priceText.toFixed(4);
+                    } else {
+                        priceText = priceText.toFixed(2);
+                    }
+
+                    tr.innerHTML = `
+                        <td style="color: var(--text-secondary); font-weight: 600;">#${idx + 1}</td>
+                        <td><b>${coin.symbol}</b></td>
+                        <td>${priceText} USDT</td>
+                        <td style="color: var(--accent-success); font-weight: 600;">+${coin.price_change_pct.toFixed(2)}%</td>
+                        <td>${volText}</td>
+                        <td>${mcapText}</td>
+                        <td style="text-align: center;">
+                            <button class="btn btn-outline btn-sm" onclick="explainGainer('${coin.symbol}')" style="padding: 4px 10px; font-size: 0.8rem; border-color: rgba(0, 210, 255, 0.3);">
+                                ✨ AI Explain
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (err) {
+                console.error("Error fetching top gainers:", err);
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:32px; color:var(--accent-error);">Connection error.</td></tr>`;
+            }
+        }
+
+        // Use Gemini AI with Google Search Grounding to explain price surge
+        async function explainGainer(symbol) {
+            const badge = document.getElementById('ai-coin-badge');
+            const container = document.getElementById('ai-analysis-container');
+            
+            badge.innerText = symbol;
+            badge.style.display = 'inline-flex';
+            
+            // Loading Animation
+            container.innerHTML = `
+                <div style="text-align: center; padding-top: 80px; color: var(--accent-primary);">
+                    <div style="font-size: 1.5rem; animation: pulse 1.8s infinite; margin-bottom: 12px;">🔮</div>
+                    <p>AI đang tìm kiếm Google Search và phân tích lý do tăng giá của <b>${symbol}</b>...</p>
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px;">Vui lòng đợi trong giây lát.</p>
+                </div>
+            `;
+
+            try {
+                const res = await fetch(`/api/explain_gainer/${symbol}`);
+                if (!res.ok) {
+                    container.innerHTML = `
+                        <div style="color: var(--accent-error); text-align: center; padding-top: 80px;">
+                            <p style="font-size: 1.5rem; margin-bottom: 12px;">⚠️</p>
+                            Không thể tải phân tích của AI. Vui lòng thử lại.
+                        </div>`;
+                    return;
+                }
+                const data = await res.json();
+                
+                // Parse markdown to HTML
+                if (window.marked) {
+                    container.innerHTML = marked.parse(data.analysis);
+                } else {
+                    container.innerText = data.analysis;
+                }
+            } catch (err) {
+                console.error("Error generating explanation:", err);
+                container.innerHTML = `
+                    <div style="color: var(--accent-error); text-align: center; padding-top: 80px;">
+                        <p style="font-size: 1.5rem; margin-bottom: 12px;">🔌</p>
+                        Lỗi kết nối đến máy chủ.
+                    </div>`;
             }
         }
 
