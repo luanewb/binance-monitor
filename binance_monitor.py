@@ -4,7 +4,7 @@ Binance Spot H1 Price and Volume Anomaly Monitor Bot
 Scans active USDT spot pairs on H1 timeframe, checks for > 10% price increase
 and > 3x average volume, then alerts via Telegram.
 
-Version: 2.5.2
+Version: 2.5.3
 """
 
 import asyncio
@@ -32,7 +32,7 @@ logger = logging.getLogger("BinanceMonitor")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 ALERTS_FILE = os.path.join(BASE_DIR, "alerts_history.json")
-VERSION = "2.5.2"
+VERSION = "2.5.3"
 
 # Leveraged tokens to exclude
 LEVERAGED_KEYWORDS = ["UPUSDT", "DOWNUSDT", "BULLUSDT", "BEARUSDT"]
@@ -281,6 +281,10 @@ async def main():
     monitor = BinanceSpotMonitor()
     logger.info("Starting standalone Binance Spot Monitor bot...")
     
+    last_mtime = 0
+    if os.path.exists(CONFIG_FILE):
+        last_mtime = os.path.getmtime(CONFIG_FILE)
+        
     while True:
         try:
             # Read config to see if we should scan
@@ -293,9 +297,31 @@ async def main():
             else:
                 logger.info("Bot is set to INACTIVE in config. Skipping scan.")
             
-            logger.info(f"Sleeping for {scan_interval} seconds...")
-            await asyncio.sleep(scan_interval)
+            # Calculate sleep duration
+            if is_running and scan_interval == 3600:
+                # Align to next H1 candle close (hour boundary)
+                now = datetime.utcnow()
+                seconds_to_next_hour = 3600 - (now.minute * 60 + now.second)
+                # Add 10s delay to ensure candle is finalized on Binance side
+                sleep_duration = seconds_to_next_hour + 10
+                logger.info(f"H1 Close alignment active: next scan scheduled in {sleep_duration}s (at next hour + 10s)")
+            else:
+                sleep_duration = scan_interval if is_running else 10  # Sleep 10s if inactive to avoid CPU-hogging
+                logger.info(f"Sleeping for {sleep_duration} seconds...")
             
+            # Sleep second-by-second and check if config file changes on disk
+            for _ in range(max(1, int(sleep_duration))):
+                await asyncio.sleep(1)
+                if os.path.exists(CONFIG_FILE):
+                    mtime = os.path.getmtime(CONFIG_FILE)
+                    if mtime != last_mtime:
+                        last_mtime = mtime
+                        monitor.load_config()
+                        current_active = monitor.config.get("is_running", False)
+                        current_interval = monitor.config.get("scan_interval_sec", 300)
+                        if current_active != is_running or current_interval != scan_interval:
+                            break
+                            
         except KeyboardInterrupt:
             logger.info("Stopping bot...")
             break

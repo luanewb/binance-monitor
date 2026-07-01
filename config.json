@@ -3,7 +3,7 @@
   "telegram_chat_id": "",
   "price_threshold_pct": 10.0,
   "volume_multiplier": 3.0,
-  "scan_interval_sec": 300,
+  "scan_interval_sec": 3600,
   "volume_avg_period": 20,
   "is_running": false
 }

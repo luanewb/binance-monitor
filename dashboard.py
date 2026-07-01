@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Binance Spot Monitor & Watchlist Web Dashboard
+Bin Spot Monitor & Watchlist Web Dashboard
 Provides a web interface to control the Binance Spot H1 anomaly detector
 and run/manage the 3 existing watchlist scripts.
 
-Version: 2.5.2
+Version: 2.5.3
 """
 
 import asyncio
@@ -26,7 +26,7 @@ from binance_monitor import BinanceSpotMonitor, CONFIG_FILE, ALERTS_FILE
 # Logger Setup
 logger = logging.getLogger("Dashboard")
 
-app = FastAPI(title="Binance Spot Monitor Dashboard", version="2.5.2")
+app = FastAPI(title="Binance Spot Monitor Dashboard", version="2.5.3")
 
 # Bot Instance
 monitor_instance = BinanceSpotMonitor()
@@ -62,11 +62,24 @@ async def monitor_loop():
                 logger.info("Triggering Spot Scan...")
                 await monitor_instance.scan_all_symbols()
             
-            # Sleep second-by-second so we can interrupt quickly if stopped
-            for _ in range(max(1, int(scan_interval))):
+            # Calculate sleep duration
+            if is_running and scan_interval == 3600:
+                # Align to next H1 candle close (hour boundary)
+                now = datetime.utcnow()
+                seconds_to_next_hour = 3600 - (now.minute * 60 + now.second)
+                # Add 10s delay to ensure candle is finalized on Binance side
+                sleep_duration = seconds_to_next_hour + 10
+                logger.info(f"H1 Close alignment active: next scan scheduled in {sleep_duration}s (at next hour + 10s)")
+            else:
+                sleep_duration = scan_interval if is_running else 10  # Sleep 10s if inactive to avoid CPU-hogging
+            
+            # Sleep second-by-second and watch for state changes
+            for _ in range(max(1, int(sleep_duration))):
                 await asyncio.sleep(1)
-                # check if state changed in memory
-                if not monitor_instance.config.get("is_running", False):
+                current_active = monitor_instance.config.get("is_running", False)
+                current_interval = monitor_instance.config.get("scan_interval_sec", 300)
+                # Break immediately if status or interval changes
+                if current_active != is_running or current_interval != scan_interval:
                     break
         except asyncio.CancelledError:
             logger.info("Monitor loop cancelled.")
@@ -121,7 +134,7 @@ async def get_status():
             for k, v in script_processes.items()
         },
         "alerts_count": len(monitor_instance.alerts_history),
-        "version": "2.5.2"
+        "version": "2.5.3"
     }
 
 @app.get("/api/config")
