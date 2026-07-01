@@ -4,7 +4,7 @@ Bin Spot Monitor & Watchlist Web Dashboard
 Provides a web interface to control the Binance Spot H1 anomaly detector
 and run/manage the 3 existing watchlist scripts.
 
-Version: 2.5.6
+Version: 2.5.7
 """
 
 import asyncio
@@ -28,7 +28,7 @@ from binance_monitor import BinanceSpotMonitor, CONFIG_FILE, ALERTS_FILE
 # Logger Setup
 logger = logging.getLogger("Dashboard")
 
-app = FastAPI(title="Binance Spot Monitor Dashboard", version="2.5.6")
+app = FastAPI(title="Binance Spot Monitor Dashboard", version="2.5.7")
 
 # Bot Instance
 monitor_instance = BinanceSpotMonitor()
@@ -187,24 +187,44 @@ async def fetch_coincap_marketcaps():
 @app.get("/api/top_gainers")
 async def get_top_gainers():
     try:
-        # 1. Fetch market cap data from CoinCap cache
+        # 1. Fetch market cap data from CoinCap/CoinGecko cache
         market_caps = await fetch_coincap_marketcaps()
         
-        # 2. Fetch 24h ticker info from Binance
-        binance_url = "https://api.binance.com/api/v3/ticker/24hr"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(binance_url, timeout=15) as resp:
-                if resp.status != 200:
-                    raise HTTPException(status_code=500, detail=f"Failed to fetch data from Binance: status {resp.status}")
-                tickers = await resp.json()
+        # 2. Fetch exchangeInfo and 24h ticker info from Binance in parallel
+        exchange_info_url = "https://api.binance.com/api/v3/exchangeInfo"
+        ticker_url = "https://api.binance.com/api/v3/ticker/24hr"
         
-        # 3. Filter USDT pairs and exclude leveraged pairs
+        async with aiohttp.ClientSession() as session:
+            async def fetch_json(url):
+                async with session.get(url, timeout=15) as resp:
+                    if resp.status == 200:
+                        return await resp.json()
+                    else:
+                        logger.error(f"Failed to fetch {url}: status {resp.status}")
+                        return None
+            
+            exchange_data, tickers = await asyncio.gather(
+                fetch_json(exchange_info_url),
+                fetch_json(ticker_url)
+            )
+            
+        if not exchange_data or not tickers:
+            raise HTTPException(status_code=500, detail="Failed to fetch complete data from Binance API.")
+            
+        # 3. Create a set of active symbols (trading status must be 'TRADING')
+        active_symbols = set()
+        for s in exchange_data.get("symbols", []):
+            if s.get("status", "") == "TRADING":
+                active_symbols.add(s.get("symbol", ""))
+        
+        # 4. Filter USDT pairs that are active and not leveraged
         leveraged_keywords = ["UPUSDT", "DOWNUSDT", "BULLUSDT", "BEARUSDT"]
         valid_tickers = []
         for t in tickers:
             symbol = t.get("symbol", "")
-            if symbol.endswith("USDT") and not any(kw in symbol for kw in leveraged_keywords):
-                # Clean symbol like LDOUSDT -> LDO to map with CoinCap
+            # Only process if it is currently trading, ends with USDT and is not a leveraged pair
+            if symbol in active_symbols and symbol.endswith("USDT") and not any(kw in symbol for kw in leveraged_keywords):
+                # Clean symbol like LDOUSDT -> LDO to map with CoinCap/CoinGecko
                 base_symbol = symbol[:-4]
                 try:
                     price_change_pct = float(t.get("priceChangePercent", 0.0))
@@ -224,7 +244,7 @@ async def get_top_gainers():
                     "market_cap": mcap
                 })
         
-        # 4. Sort by price_change_pct descending and pick top 20
+        # 5. Sort by price_change_pct descending and pick top 20
         valid_tickers.sort(key=lambda x: x["price_change_pct"], reverse=True)
         top_20 = valid_tickers[:20]
         
@@ -333,7 +353,7 @@ async def get_status():
             for k, v in script_processes.items()
         },
         "alerts_count": len(monitor_instance.alerts_history),
-        "version": "2.5.6"
+        "version": "2.5.7"
     }
 
 @app.get("/api/config")
@@ -530,4 +550,4 @@ async def download_watchlist(name: str):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("dashboard:app", host="127.0.0.1", port=8080, reload=False)
+    uvicorn.run("dashboard:app", host="0.0.0.0", port=8080, reload=False)

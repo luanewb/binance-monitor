@@ -13,6 +13,6 @@ echo Press Ctrl+C in this terminal to stop the server.
 echo ========================================================
 echo.
 
-python -m uvicorn dashboard:app --host 127.0.0.1 --port 8080
+python -m uvicorn dashboard:app --host 0.0.0.0 --port 8080
 
 pause
