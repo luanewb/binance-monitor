@@ -4,7 +4,7 @@ USDT Pair Watchlist Generator for TradingView
 Filters USDT coin pairs on Binance with 24h trading volume >= $1,000,000 USD
 and exports them to a TradingView importable watchlist file.
 
-Version: 1.0.0
+Version: 1.0.1
 """
 
 import json
@@ -12,21 +12,44 @@ import sys
 import urllib.request
 import urllib.error
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
+INFO_URL = "https://api.binance.com/api/v3/exchangeInfo"
 API_URL = "https://api.binance.com/api/v3/ticker/24hr"
 DEFAULT_VOLUME_THRESHOLD = 1_000_000.0  # $1,000,000 USD
 OUTPUT_FILE = "tradingview_watchlist.txt"
 
+def fetch_active_symbols():
+    """Fetches set of symbols currently in TRADING status from Binance exchangeInfo."""
+    print("Fetching active trading pairs from Binance exchangeInfo...")
+    req = urllib.request.Request(
+        INFO_URL,
+        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            data = json.loads(response.read().decode())
+            active_symbols = {
+                s["symbol"] for s in data.get("symbols", [])
+                if s.get("status") == "TRADING"
+            }
+            return active_symbols
+    except urllib.error.URLError as e:
+        print(f"Warning: Could not fetch exchangeInfo ({e}). Falling back to all symbols.", file=sys.stderr)
+        return None
+    except json.JSONDecodeError as e:
+        print(f"Warning: Could not decode exchangeInfo JSON ({e}). Falling back to all symbols.", file=sys.stderr)
+        return None
+
 def fetch_ticker_data():
     """Fetches 24-hour ticker data from Binance API."""
-    print("Fetching ticker data from Binance...")
+    print("Fetching ticker statistics from Binance...")
     req = urllib.request.Request(
         API_URL,
         headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     )
     try:
-        with urllib.request.urlopen(req, timeout=10) as response:
+        with urllib.request.urlopen(req, timeout=15) as response:
             return json.loads(response.read().decode())
     except urllib.error.URLError as e:
         print(f"Error fetching ticker data: {e}", file=sys.stderr)
@@ -35,10 +58,11 @@ def fetch_ticker_data():
         print(f"Error decoding JSON response: {e}", file=sys.stderr)
         sys.exit(1)
 
-def filter_and_format_pairs(tickers, threshold):
-    """Filters USDT pairs exceeding the volume threshold, excluding leveraged tokens."""
+def filter_and_format_pairs(tickers, active_symbols, threshold):
+    """Filters USDT pairs exceeding the volume threshold, excluding leveraged and inactive tokens."""
     watchlist = []
     skipped_leveraged = 0
+    skipped_inactive = 0
     low_volume = 0
     other_pairs = 0
     
@@ -58,6 +82,11 @@ def filter_and_format_pairs(tickers, threshold):
             skipped_leveraged += 1
             continue
             
+        # Filter out inactive/delisted symbols
+        if active_symbols is not None and symbol not in active_symbols:
+            skipped_inactive += 1
+            continue
+            
         try:
             # quoteVolume is the volume of the quote asset (USDT for *USDT pairs)
             quote_volume = float(ticker.get("quoteVolume", 0))
@@ -73,6 +102,7 @@ def filter_and_format_pairs(tickers, threshold):
     watchlist.sort()
     return watchlist, {
         "skipped_leveraged": skipped_leveraged,
+        "skipped_inactive": skipped_inactive,
         "low_volume": low_volume,
         "other_pairs": other_pairs
     }
@@ -81,8 +111,10 @@ def main():
     print(f"Watchlist Generator v{__version__}")
     print(f"Threshold: ${DEFAULT_VOLUME_THRESHOLD:,.2f} USD")
     
+    active_symbols = fetch_active_symbols()
     tickers = fetch_ticker_data()
-    watchlist, stats = filter_and_format_pairs(tickers, DEFAULT_VOLUME_THRESHOLD)
+    
+    watchlist, stats = filter_and_format_pairs(tickers, active_symbols, DEFAULT_VOLUME_THRESHOLD)
     
     # Save watchlist to file
     try:
@@ -97,6 +129,7 @@ def main():
     print(f"Total matching USDT pairs: {len(watchlist)}")
     print(f"Filtered out (low volume): {stats['low_volume']}")
     print(f"Filtered out (leveraged):  {stats['skipped_leveraged']}")
+    print(f"Filtered out (inactive):   {stats['skipped_inactive']}")
     print(f"Non-USDT pairs ignored:    {stats['other_pairs']}")
 
 if __name__ == "__main__":
