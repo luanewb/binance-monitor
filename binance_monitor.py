@@ -4,7 +4,7 @@ Binance Spot H1 Price and Volume Anomaly Monitor Bot
 Scans active USDT spot pairs on H1 timeframe, checks for > 10% price increase
 and > 3x average volume, then alerts via Telegram.
 
-Version: 2.5.3
+Version: 2.5.4
 """
 
 import asyncio
@@ -32,7 +32,7 @@ logger = logging.getLogger("BinanceMonitor")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 ALERTS_FILE = os.path.join(BASE_DIR, "alerts_history.json")
-VERSION = "2.5.3"
+VERSION = "2.5.4"
 
 # Leveraged tokens to exclude
 LEVERAGED_KEYWORDS = ["UPUSDT", "DOWNUSDT", "BULLUSDT", "BEARUSDT"]
@@ -115,6 +115,29 @@ class BinanceSpotMonitor:
             logger.error(f"Failed to send Telegram alert: {e}")
             return False
 
+    async def fetch_24h_ticker_volumes(self, session):
+        """Fetches 24h trading volume (quoteVolume) for all symbols on Binance."""
+        url = "https://api.binance.com/api/v3/ticker/24hr"
+        try:
+            async with session.get(url, timeout=15) as resp:
+                if resp.status != 200:
+                    logger.error(f"Failed to fetch 24h ticker data: {resp.status}")
+                    return {}
+                data = await resp.json()
+                volumes = {}
+                if isinstance(data, list):
+                    for ticker in data:
+                        symbol = ticker.get("symbol", "")
+                        try:
+                            quote_volume = float(ticker.get("quoteVolume", 0.0))
+                        except (ValueError, TypeError):
+                            quote_volume = 0.0
+                        volumes[symbol] = quote_volume
+                return volumes
+        except Exception as e:
+            logger.error(f"Error fetching 24h ticker volumes: {e}")
+            return {}
+
     async def fetch_active_usdt_pairs(self, session):
         """Fetches active spot trading symbols on Binance ending in USDT (excluding leveraged)."""
         url = "https://api.binance.com/api/v3/exchangeInfo"
@@ -174,9 +197,11 @@ class BinanceSpotMonitor:
         price_threshold = self.config.get("price_threshold_pct", 10.0)
         volume_multiplier = self.config.get("volume_multiplier", 3.0)
         period = self.config.get("volume_avg_period", 20)
+        min_24h_volume = self.config.get("min_24h_volume", 1000000.0)
         
         connector = aiohttp.TCPConnector(limit=50)
         async with aiohttp.ClientSession(connector=connector) as session:
+            ticker_volumes = await self.fetch_24h_ticker_volumes(session)
             symbols = await self.fetch_active_usdt_pairs(session)
             if not symbols:
                 logger.warning("No symbols fetched. Skipping scan.")
@@ -192,6 +217,11 @@ class BinanceSpotMonitor:
             
             for symbol, klines in results:
                 if not klines or len(klines) < period + 1:
+                    continue
+                
+                # Check 24h volume threshold
+                vol_24h = ticker_volumes.get(symbol, 0.0)
+                if vol_24h < min_24h_volume:
                     continue
                 
                 scanned_count += 1

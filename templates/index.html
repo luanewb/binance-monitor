@@ -685,7 +685,7 @@
         <div class="logo">
             <div class="logo-icon">B</div>
             <div class="logo-text">Binance Watch</div>
-            <span class="version-badge" id="version-badge">v2.5.3</span>
+            <span class="version-badge" id="version-badge">v2.5.4</span>
         </div>
         
         <nav>
@@ -789,6 +789,16 @@
                                 <label for="volume_avg_period">Volume Average Period (Hours)</label>
                                 <input type="number" id="volume_avg_period" value="20" min="5" max="100">
                                 <div class="help-text">Number of H1 candles to calculate average volume.</div>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="min_24h_volume">Min 24h Volume (USDT)</label>
+                                <input type="number" id="min_24h_volume" value="1000000" min="0">
+                                <div class="help-text">Only alert on coins with 24-hour trading volume above this threshold.</div>
+                            </div>
+                            <div class="form-group">
                             </div>
                         </div>
 
@@ -1113,6 +1123,7 @@
                 document.getElementById('volume_multiplier').value = config.volume_multiplier;
                 document.getElementById('scan_interval_sec').value = config.scan_interval_sec;
                 document.getElementById('volume_avg_period').value = config.volume_avg_period;
+                document.getElementById('min_24h_volume').value = config.min_24h_volume !== undefined ? config.min_24h_volume : 1000000;
 
                 document.getElementById('stats-interval-lbl').innerText = config.scan_interval_sec + 's';
             } catch (err) {
@@ -1130,7 +1141,8 @@
                 price_threshold_pct: parseFloat(document.getElementById('price_threshold_pct').value),
                 volume_multiplier: parseFloat(document.getElementById('volume_multiplier').value),
                 scan_interval_sec: parseInt(document.getElementById('scan_interval_sec').value),
-                volume_avg_period: parseInt(document.getElementById('volume_avg_period').value)
+                volume_avg_period: parseInt(document.getElementById('volume_avg_period').value),
+                min_24h_volume: parseFloat(document.getElementById('min_24h_volume').value)
             };
 
             try {
