@@ -4,7 +4,7 @@ Bin Spot Monitor & Watchlist Web Dashboard
 Provides a web interface to control the Binance Spot H1 anomaly detector
 and run/manage the 3 existing watchlist scripts.
 
-Version: 2.5.9
+Version: 2.5.10
 """
 
 import asyncio
@@ -13,8 +13,9 @@ import os
 import sys
 import logging
 import time
+import re
 import aiohttp
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
@@ -30,7 +31,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Logger Setup
 logger = logging.getLogger("Dashboard")
 
-app = FastAPI(title="Binance Spot Monitor Dashboard", version="2.5.9")
+app = FastAPI(title="Binance Spot Monitor Dashboard", version="2.5.10")
 
 # Bot Instance
 monitor_instance = BinanceSpotMonitor()
@@ -424,7 +425,7 @@ async def get_status():
             for k, v in script_processes.items()
         },
         "alerts_count": len(monitor_instance.alerts_history),
-        "version": "2.5.9"
+        "version": "2.5.10"
     }
 
 @app.get("/api/config")
@@ -622,7 +623,43 @@ async def download_watchlist(name: str):
 @app.get("/api/delisting")
 async def get_delisting():
     articles = await fetch_binance_delistings()
-    return articles
+    parsed_results = []
+    now_utc = datetime.now(timezone.utc)
+    
+    for art in articles:
+        title = art.get("title", "")
+        # Match "Binance Will Delist ... on YYYY-MM-DD"
+        match = re.search(r"Binance Will Delist (.*?) on (\d{4}-\d{2}-\d{2})", title, re.IGNORECASE)
+        if match:
+            coins_str = match.group(1)
+            date_str = match.group(2)
+            
+            # Clean coins string to list
+            raw_coins = re.split(r',|\band\b', coins_str)
+            coins = [c.strip().upper() for c in raw_coins if c.strip()]
+            
+            # Parse delist time (03:00 UTC)
+            try:
+                delist_time_utc = datetime.strptime(f"{date_str} 03:00:00", "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+            except Exception:
+                continue
+                
+            # Only keep if not yet delisted (time is in the future)
+            if delist_time_utc > now_utc:
+                # Convert to VN time (GMT+7)
+                vn_tz = timezone(timedelta(hours=7))
+                delist_time_vn = delist_time_utc.astimezone(vn_tz)
+                delist_time_vn_str = delist_time_vn.strftime("%H:%M %d/%m/%Y")
+                
+                parsed_results.append({
+                    "coins": coins,
+                    "coins_str": ", ".join(coins),
+                    "delist_time": delist_time_vn_str,
+                    "code": art.get("code"),
+                    "title": title,
+                    "releaseDate": art.get("releaseDate")
+                })
+    return parsed_results
 
 @app.get("/api/explain_delist/{article_code}")
 async def explain_delist(article_code: str):

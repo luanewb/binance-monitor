@@ -1078,8 +1078,8 @@
                         <thead>
                             <tr>
                                 <th style="width: 60px;">STT</th>
-                                <th>Tiêu đề thông báo</th>
-                                <th>Ngày công bố</th>
+                                <th>Coin Bị Delist</th>
+                                <th>Thời gian Delist (GMT+7)</th>
                                 <th style="text-align: center;">Link gốc</th>
                                 <th style="text-align: center;">Hành động</th>
                             </tr>
@@ -1580,36 +1580,39 @@
                     tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:32px; color:var(--accent-error);">Không thể tải danh sách delisting.</td></tr>`;
                     return;
                 }
-                const articles = await res.json();
+                const data = await res.json();
                 tbody.innerHTML = '';
                 
-                if (articles.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:32px; color:var(--text-secondary);">Không tìm thấy thông báo delist nào.</td></tr>`;
+                if (data.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:32px; color:var(--text-secondary);">Không có coin nào sắp bị delist khỏi Spot.</td></tr>`;
                     return;
                 }
 
-                articles.forEach((art, idx) => {
+                data.forEach((item, idx) => {
                     const tr = document.createElement('tr');
                     
-                    // Format date
-                    const date = new Date(art.releaseDate);
-                    const dateStr = date.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false });
-                    
-                    const originalUrl = `https://www.binance.com/en/support/announcement/${art.code}`;
+                    const originalUrl = `https://www.binance.com/en/support/announcement/${item.code}`;
+
+                    // Render coin badges
+                    const coinBadges = item.coins.map(c => `<span class="badge" style="background-color: rgba(255, 23, 68, 0.15); color: var(--accent-error); border: 1px solid rgba(255, 23, 68, 0.25); margin-right: 4px; padding: 2px 6px;">${c}</span>`).join('');
 
                     tr.innerHTML = `
                         <td style="color: var(--text-secondary); font-weight: 600;">#${idx + 1}</td>
-                        <td style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                            <span title="${art.title}"><b>${art.title}</b></span>
+                        <td>
+                            <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                                ${coinBadges}
+                            </div>
                         </td>
-                        <td style="color: var(--text-secondary); font-size: 0.85rem;">${dateStr}</td>
+                        <td style="color: var(--accent-warning); font-weight: 600; font-size: 0.9rem;">
+                            🕒 ${item.delist_time}
+                        </td>
                         <td style="text-align: center;">
                             <a href="${originalUrl}" target="_blank" class="btn btn-outline btn-sm btn-icon-only" title="Xem bài viết gốc" style="padding: 4px 8px; border-color: rgba(255,255,255,0.08);">
                                 🌐 Link
                             </a>
                         </td>
                         <td style="text-align: center;">
-                            <button class="btn btn-outline btn-sm" onclick="explainDelisting('${art.code}', '${art.title}')" style="padding: 4px 10px; font-size: 0.8rem; border-color: rgba(255, 23, 68, 0.3); color: #fff;">
+                            <button class="btn btn-outline btn-sm" onclick="explainDelisting('${item.code}', '${item.title}')" style="padding: 4px 10px; font-size: 0.8rem; border-color: rgba(255, 23, 68, 0.3); color: #fff;">
                                 ✨ AI Phân tích
                             </button>
                         </td>
