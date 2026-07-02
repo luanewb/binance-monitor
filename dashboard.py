@@ -4,7 +4,7 @@ Bin Spot Monitor & Watchlist Web Dashboard
 Provides a web interface to control the Binance Spot H1 anomaly detector
 and run/manage the 3 existing watchlist scripts.
 
-Version: 2.5.12
+Version: 2.5.13
 """
 
 import asyncio
@@ -31,7 +31,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Logger Setup
 logger = logging.getLogger("Dashboard")
 
-app = FastAPI(title="Binance Spot Monitor Dashboard", version="2.5.12")
+app = FastAPI(title="Binance Spot Monitor Dashboard", version="2.5.13")
 
 # Bot Instance
 monitor_instance = BinanceSpotMonitor()
@@ -127,62 +127,225 @@ COINCAP_CACHE = {
     "last_fetched": 0
 }
 
+MARKET_CAP_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+}
+
+COINGECKO_ID_OVERRIDES = {
+    "NOM": "nomina"
+}
+AMBIGUOUS_MARKET_CAP_SYMBOLS = set(COINGECKO_ID_OVERRIDES.keys())
+
+def _store_market_cap(market_caps: dict, symbol: str, market_cap) -> bool:
+    sym = (symbol or "").upper().strip()
+    if not sym:
+        return False
+    try:
+        mcap = float(market_cap or 0)
+    except (ValueError, TypeError):
+        return False
+    if mcap <= 0:
+        return False
+    if market_caps.get(sym, 0.0) <= 0:
+        market_caps[sym] = mcap
+        return True
+    return False
+
+async def _merge_coingecko_marketcaps(session: aiohttp.ClientSession, market_caps: dict, pages: int = 4) -> int:
+    added = 0
+    for page in range(1, pages + 1):
+        url = (
+            "https://api.coingecko.com/api/v3/coins/markets"
+            f"?vs_currency=usd&order=market_cap_desc&per_page=250&page={page}"
+        )
+        try:
+            async with session.get(url, headers=MARKET_CAP_HEADERS, timeout=10) as resp:
+                if resp.status != 200:
+                    logger.warning(f"CoinGecko markets page {page} returned status {resp.status}.")
+                    break
+                for asset in await resp.json():
+                    if _store_market_cap(market_caps, asset.get("symbol"), asset.get("market_cap")):
+                        added += 1
+        except Exception as e:
+            logger.warning(f"Error fetching CoinGecko markets page {page}: {e}")
+            break
+    return added
+
+async def _merge_coincap_marketcaps(session: aiohttp.ClientSession, market_caps: dict) -> int:
+    added = 0
+    try:
+        url = "https://api.coincap.io/v2/assets?limit=2000"
+        async with session.get(url, headers=MARKET_CAP_HEADERS, timeout=10) as resp:
+            if resp.status != 200:
+                logger.warning(f"CoinCap assets returned status {resp.status}.")
+                return added
+            for asset in (await resp.json()).get("data", []):
+                if _store_market_cap(market_caps, asset.get("symbol"), asset.get("marketCapUsd")):
+                    added += 1
+    except Exception as e:
+        logger.warning(f"Error fetching CoinCap market caps: {e}")
+    return added
+
+async def _merge_coinpaprika_marketcaps(session: aiohttp.ClientSession, market_caps: dict, symbols: Optional[set] = None) -> int:
+    added = 0
+    wanted = {s.upper() for s in symbols} if symbols else None
+    try:
+        url = "https://api.coinpaprika.com/v1/tickers?quotes=USD"
+        async with session.get(url, headers=MARKET_CAP_HEADERS, timeout=20) as resp:
+            if resp.status != 200:
+                logger.warning(f"CoinPaprika tickers returned status {resp.status}.")
+                return added
+            for asset in await resp.json():
+                sym = (asset.get("symbol") or "").upper()
+                if wanted and sym not in wanted:
+                    continue
+                market_cap = asset.get("quotes", {}).get("USD", {}).get("market_cap")
+                if _store_market_cap(market_caps, sym, market_cap):
+                    added += 1
+                if wanted and wanted.issubset({k for k, v in market_caps.items() if v > 0}):
+                    break
+    except Exception as e:
+        logger.warning(f"Error fetching CoinPaprika market caps: {e}")
+    return added
+
+async def _merge_coinlore_marketcaps(session: aiohttp.ClientSession, market_caps: dict, symbols: set, max_start: int = 5000) -> int:
+    added = 0
+    wanted = {s.upper() for s in symbols if s}
+    if not wanted:
+        return added
+
+    found = {s for s in wanted if market_caps.get(s, 0.0) > 0}
+    for start in range(0, max_start + 1, 100):
+        if wanted.issubset(found):
+            break
+        try:
+            url = f"https://api.coinlore.net/api/tickers/?start={start}&limit=100"
+            async with session.get(url, headers=MARKET_CAP_HEADERS, timeout=10) as resp:
+                if resp.status != 200:
+                    logger.warning(f"CoinLore tickers start {start} returned status {resp.status}.")
+                    break
+                data = (await resp.json()).get("data", [])
+        except Exception as e:
+            logger.warning(f"Error fetching CoinLore market caps start {start}: {e}")
+            break
+
+        if not data:
+            break
+        for asset in data:
+            sym = (asset.get("symbol") or "").upper()
+            if sym not in wanted:
+                continue
+            if _store_market_cap(market_caps, sym, asset.get("market_cap_usd")):
+                added += 1
+            if market_caps.get(sym, 0.0) > 0:
+                found.add(sym)
+    return added
+
+async def _fetch_coingecko_symbol_marketcaps(session: aiohttp.ClientSession, symbols: set) -> dict:
+    requested_symbols = {s.upper() for s in symbols if s}
+    id_by_symbol = {
+        symbol: COINGECKO_ID_OVERRIDES[symbol]
+        for symbol in requested_symbols
+        if symbol in COINGECKO_ID_OVERRIDES
+    }
+    semaphore = asyncio.Semaphore(4)
+
+    async def search_symbol(symbol: str):
+        async with semaphore:
+            try:
+                async with session.get(
+                    "https://api.coingecko.com/api/v3/search",
+                    params={"query": symbol},
+                    headers=MARKET_CAP_HEADERS,
+                    timeout=10
+                ) as resp:
+                    if resp.status != 200:
+                        logger.warning(f"CoinGecko search for {symbol} returned status {resp.status}.")
+                        return
+                    coins = (await resp.json()).get("coins", [])
+            except Exception as e:
+                logger.warning(f"Error searching CoinGecko market cap for {symbol}: {e}")
+                return
+
+        exact_matches = [
+            coin for coin in coins
+            if (coin.get("symbol") or "").upper() == symbol
+        ]
+        ranked = sorted(
+            exact_matches,
+            key=lambda coin: coin.get("market_cap_rank") or 10**9
+        )
+        if ranked:
+            id_by_symbol[symbol] = ranked[0].get("id")
+
+    search_symbols = requested_symbols - set(id_by_symbol.keys())
+    await asyncio.gather(*(search_symbol(symbol) for symbol in search_symbols))
+    ids = [coin_id for coin_id in id_by_symbol.values() if coin_id]
+    if not ids:
+        return {}
+
+    market_caps = {}
+    for attempt in range(2):
+        try:
+            async with session.get(
+                "https://api.coingecko.com/api/v3/coins/markets",
+                params={"vs_currency": "usd", "ids": ",".join(ids), "per_page": len(ids)},
+                headers=MARKET_CAP_HEADERS,
+                timeout=15
+            ) as resp:
+                if resp.status == 429 and attempt == 0:
+                    await asyncio.sleep(2)
+                    continue
+                if resp.status != 200:
+                    logger.warning(f"CoinGecko exact-symbol markets returned status {resp.status}.")
+                    return {}
+                for asset in await resp.json():
+                    _store_market_cap(market_caps, asset.get("symbol"), asset.get("market_cap"))
+                break
+        except Exception as e:
+            logger.warning(f"Error fetching CoinGecko exact-symbol market caps: {e}")
+            break
+    return market_caps
+
+async def fetch_missing_marketcaps(symbols: set) -> dict:
+    missing = {s.upper() for s in symbols if s}
+    if not missing:
+        return {}
+
+    market_caps = {}
+    async with aiohttp.ClientSession() as session:
+        market_caps.update(await _fetch_coingecko_symbol_marketcaps(session, missing))
+        missing = {s for s in missing if market_caps.get(s, 0.0) <= 0}
+        coinlore_symbols = missing - AMBIGUOUS_MARKET_CAP_SYMBOLS
+        await _merge_coinlore_marketcaps(session, market_caps, coinlore_symbols)
+        still_missing = {s for s in missing if market_caps.get(s, 0.0) <= 0}
+        await _merge_coinpaprika_marketcaps(session, market_caps, still_missing)
+        still_missing = {s for s in missing if market_caps.get(s, 0.0) <= 0}
+        if still_missing:
+            logger.warning(f"Market cap still missing for symbols: {sorted(still_missing)}")
+    return market_caps
+
 async def fetch_coincap_marketcaps():
     now = time.time()
     # Cache for 5 minutes (300 seconds)
     if now - COINCAP_CACHE["last_fetched"] < 300 and COINCAP_CACHE["data"]:
         return COINCAP_CACHE["data"]
     
-    # Try CoinGecko first (since it is reachable on user's network)
-    try:
-        url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        }
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers, timeout=10) as resp:
-                if resp.status == 200:
-                    res_json = await resp.json()
-                    new_data = {}
-                    for asset in res_json:
-                        sym = asset.get("symbol", "").upper()
-                        try:
-                            mcap = float(asset.get("market_cap") or 0)
-                        except:
-                            mcap = 0.0
-                        new_data[sym] = mcap
-                    COINCAP_CACHE["data"] = new_data
-                    COINCAP_CACHE["last_fetched"] = now
-                    logger.info("Fetched CoinGecko market cap data successfully.")
-                    return COINCAP_CACHE["data"]
-                else:
-                    logger.warning(f"CoinGecko API returned status {resp.status}. Trying CoinCap fallback...")
-    except Exception as e:
-        logger.warning(f"Error fetching CoinGecko market caps: {e}. Trying CoinCap fallback...")
-        
-    # Fallback to CoinCap
-    try:
-        url = "https://api.coincap.io/v2/assets?limit=2000"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=10) as resp:
-                if resp.status == 200:
-                    res_json = await resp.json()
-                    new_data = {}
-                    for asset in res_json.get("data", []):
-                        sym = asset.get("symbol", "").upper()
-                        try:
-                            mcap = float(asset.get("marketCapUsd") or 0)
-                        except:
-                            mcap = 0.0
-                        new_data[sym] = mcap
-                    COINCAP_CACHE["data"] = new_data
-                    COINCAP_CACHE["last_fetched"] = now
-                    logger.info("Fetched CoinCap market cap data successfully as fallback.")
-                else:
-                    logger.error(f"Failed to fetch CoinCap data fallback: status {resp.status}")
-    except Exception as e:
-        logger.error(f"Error fetching CoinCap market caps fallback: {e}")
-        
+    new_data = {}
+    async with aiohttp.ClientSession() as session:
+        coingecko_added = await _merge_coingecko_marketcaps(session, new_data)
+        coincap_added = await _merge_coincap_marketcaps(session, new_data)
+        coinpaprika_added = await _merge_coinpaprika_marketcaps(session, new_data)
+
+    if new_data:
+        COINCAP_CACHE["data"] = new_data
+        COINCAP_CACHE["last_fetched"] = now
+        logger.info(
+            "Fetched market cap data: "
+            f"CoinGecko +{coingecko_added}, CoinCap +{coincap_added}, "
+            f"CoinPaprika +{coinpaprika_added}, total {len(new_data)} symbols."
+        )
+
     return COINCAP_CACHE["data"]
 
 # Binance Delisting Announcements Cache
@@ -349,6 +512,16 @@ async def get_top_gainers():
         # 5. Sort by price_change_pct descending and pick top 20
         valid_tickers.sort(key=lambda x: x["price_change_pct"], reverse=True)
         top_20 = valid_tickers[:20]
+
+        missing_mcap_symbols = {
+            item["base_symbol"] for item in top_20
+            if item.get("market_cap", 0.0) <= 0
+        }
+        if missing_mcap_symbols:
+            top_20_market_caps = await fetch_missing_marketcaps(missing_mcap_symbols)
+            market_caps.update(top_20_market_caps)
+            for item in top_20:
+                item["market_cap"] = market_caps.get(item["base_symbol"], item["market_cap"])
         
         return top_20
     except Exception as e:
@@ -455,7 +628,7 @@ async def get_status():
             for k, v in script_processes.items()
         },
         "alerts_count": len(monitor_instance.alerts_history),
-        "version": "2.5.12"
+        "version": "2.5.13"
     }
 
 @app.get("/api/config")
