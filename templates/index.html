@@ -1504,9 +1504,15 @@
                         priceText = priceText.toFixed(2);
                     }
 
+                    // Delisting Badge
+                    let delistingBadge = '';
+                    if (coin.is_delisting) {
+                        delistingBadge = `<span class="badge badge-error" style="font-size: 0.75rem; margin-left: 6px; padding: 2px 6px; background-color: rgba(255, 23, 68, 0.15); color: var(--accent-error); border: 1px solid rgba(255, 23, 68, 0.3); font-weight: bold; border-radius: 4px;" title="Sắp delist: ${coin.delist_date}">DELIST</span>`;
+                    }
+
                     tr.innerHTML = `
                         <td style="color: var(--text-secondary); font-weight: 600;">#${idx + 1}</td>
-                        <td><b>${coin.symbol}</b></td>
+                        <td><b>${coin.symbol}</b>${delistingBadge}</td>
                         <td>${priceText} USDT</td>
                         <td style="color: var(--accent-success); font-weight: 600;">+${coin.price_change_pct.toFixed(2)}%</td>
                         <td>${volText}</td>

@@ -4,7 +4,7 @@ Bin Spot Monitor & Watchlist Web Dashboard
 Provides a web interface to control the Binance Spot H1 anomaly detector
 and run/manage the 3 existing watchlist scripts.
 
-Version: 2.5.10
+Version: 2.5.11
 """
 
 import asyncio
@@ -31,7 +31,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Logger Setup
 logger = logging.getLogger("Dashboard")
 
-app = FastAPI(title="Binance Spot Monitor Dashboard", version="2.5.10")
+app = FastAPI(title="Binance Spot Monitor Dashboard", version="2.5.11")
 
 # Bot Instance
 monitor_instance = BinanceSpotMonitor()
@@ -283,6 +283,32 @@ async def get_top_gainers():
         if not exchange_data or not tickers:
             raise HTTPException(status_code=500, detail="Failed to fetch complete data from Binance API.")
             
+        # Get active delisting coins
+        delisting_coins = {}
+        try:
+            delist_articles = await fetch_binance_delistings()
+            now_utc = datetime.now(timezone.utc)
+            for art in delist_articles:
+                title = art.get("title", "")
+                match = re.search(r"Binance Will Delist (.*?) on (\d{4}-\d{2}-\d{2})", title, re.IGNORECASE)
+                if match:
+                    coins_str = match.group(1)
+                    date_str = match.group(2)
+                    try:
+                        delist_time_utc = datetime.strptime(f"{date_str} 03:00:00", "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+                    except Exception:
+                        continue
+                    if delist_time_utc > now_utc:
+                        raw_coins = re.split(r',|\band\b', coins_str)
+                        for c in raw_coins:
+                            c_clean = c.strip().upper()
+                            if c_clean:
+                                vn_tz = timezone(timedelta(hours=7))
+                                delist_time_vn = delist_time_utc.astimezone(vn_tz)
+                                delisting_coins[c_clean] = delist_time_vn.strftime("%d/%m/%Y")
+        except Exception as e:
+            logger.error(f"Error parsing delisting coins for top gainers: {e}")
+            
         # 3. Create a set of active symbols (trading status must be 'TRADING')
         active_symbols = set()
         for s in exchange_data.get("symbols", []):
@@ -306,6 +332,8 @@ async def get_top_gainers():
                     continue
                 
                 mcap = market_caps.get(base_symbol, 0.0)
+                is_delisting = base_symbol in delisting_coins
+                delist_date = delisting_coins.get(base_symbol) if is_delisting else None
                 
                 valid_tickers.append({
                     "symbol": symbol,
@@ -313,7 +341,9 @@ async def get_top_gainers():
                     "price_change_pct": price_change_pct,
                     "last_price": last_price,
                     "quote_volume": quote_volume,
-                    "market_cap": mcap
+                    "market_cap": mcap,
+                    "is_delisting": is_delisting,
+                    "delist_date": delist_date
                 })
         
         # 5. Sort by price_change_pct descending and pick top 20
@@ -425,7 +455,7 @@ async def get_status():
             for k, v in script_processes.items()
         },
         "alerts_count": len(monitor_instance.alerts_history),
-        "version": "2.5.10"
+        "version": "2.5.11"
     }
 
 @app.get("/api/config")

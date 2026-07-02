@@ -1,7 +1,7 @@
 @echo off
 title Binance Spot Monitor & Watchlist Dashboard
 echo ========================================================
-echo   Binance Spot Monitor & Watchlist Dashboard v2.5.2
+echo   Binance Spot Monitor & Watchlist Dashboard v2.5.11
 echo ========================================================
 echo.
 echo Starting FastAPI Dashboard using Uvicorn...
