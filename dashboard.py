@@ -563,7 +563,7 @@ async def explain_gainer(symbol: str):
         f"4. Trích dẫn nguồn thông tin hoặc thời gian diễn ra tin tức nếu có."
     )
     
-    gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_key}"
+    gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={gemini_key}"
     
     payload = {
         "contents": [
@@ -1021,7 +1021,7 @@ async def explain_delist(article_code: str):
         f"7. Định dạng câu trả lời bằng Markdown đẹp mắt với tiêu đề rõ ràng, các gạch đầu dòng, bảng biểu (nếu cần) và in đậm thông tin quan trọng."
     )
 
-    gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_key}"
+    gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={gemini_key}"
     payload = {
         "contents": [
             {
