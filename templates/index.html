@@ -743,6 +743,10 @@
                 <svg viewBox="0 0 24 24"><path d="M23 6l-9.5 9.5-5-5L1 18"></path><path d="M17 6h6v6"></path></svg>
                 Top 20 Gainers
             </div>
+            <div class="nav-item" onclick="switchView('delisting-view', this)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                Coin Sắp Delist
+            </div>
             <div class="nav-item" onclick="switchView('history-view', this)">
                 <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                 Alert History
@@ -1055,6 +1059,57 @@
             </div>
         </section>
 
+        <!-- View 5: Coin Sắp Bị Delist & AI Analysis -->
+        <section id="delisting-view" class="view-section">
+            <div class="page-header" style="display:flex; justify-content:space-between; align-items:flex-end;">
+                <div>
+                    <h1 class="page-title">Thông Báo Delist Gần Đây (Binance)</h1>
+                    <p class="page-subtitle">Danh sách các thông báo hủy niêm yết (delist) mới nhất và phân tích lịch trình chi tiết bằng AI.</p>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-primary btn-sm" onclick="fetchDelistingAnnouncements()">Refresh</button>
+                </div>
+            </div>
+
+            <div class="content-grid" style="grid-template-columns: 3fr 2fr;">
+                <!-- Table Panel -->
+                <div class="panel-card" style="padding:0; overflow-x:auto; margin-bottom: 0;">
+                    <table id="delisting-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px;">STT</th>
+                                <th>Tiêu đề thông báo</th>
+                                <th>Ngày công bố</th>
+                                <th style="text-align: center;">Link gốc</th>
+                                <th style="text-align: center;">Hành động</th>
+                            </tr>
+                        </thead>
+                        <tbody id="delisting-tbody">
+                            <tr>
+                                <td colspan="5" style="text-align:center; padding:32px; color:var(--text-secondary);">Đang tải dữ liệu delisting...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- AI Panel -->
+                <div class="panel-card" style="margin-bottom: 0; display: flex; flex-direction: column;">
+                    <div class="panel-title">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 1.2rem;">✨</span> AI Delisting Analysis
+                        </div>
+                        <span id="ai-delist-badge" class="badge badge-error" style="display: none; background-color: rgba(255, 23, 68, 0.1); color: var(--accent-error); border: 1px solid rgba(255, 23, 68, 0.2);">DELIST</span>
+                    </div>
+                    <div id="ai-delist-container" style="flex-grow: 1; min-height: 380px; max-height: 600px; overflow-y: auto; padding: 4px; line-height: 1.6; font-size: 0.95rem;">
+                        <div style="color: var(--text-secondary); text-align: center; padding-top: 80px;">
+                            <p style="font-size: 1.5rem; margin-bottom: 12px;">🤖</p>
+                            Chọn một thông báo ở bảng bên trái và click <b>"AI Phân tích"</b> để trích xuất và phân tích lịch trình delist chi tiết bằng Gemini AI.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
     </main>
 
     <!-- Toast Notification -->
@@ -1082,6 +1137,8 @@
                 fetchLogs('monitor');
             } else if (viewId === 'gainers-view') {
                 fetchTopGainers();
+            } else if (viewId === 'delisting-view') {
+                fetchDelistingAnnouncements();
             }
         }
 
@@ -1510,6 +1567,105 @@
                         <p style="font-size: 1.5rem; margin-bottom: 12px;">🔌</p>
                         Lỗi kết nối đến máy chủ.
                     </div>`;
+            }
+        }
+
+        // Fetch Binance Delisting Announcements
+        async function fetchDelistingAnnouncements() {
+            const tbody = document.getElementById('delisting-tbody');
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:32px; color:var(--text-secondary);">Đang tải thông báo từ Binance...</td></tr>`;
+            try {
+                const res = await fetch('/api/delisting');
+                if (!res.ok) {
+                    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:32px; color:var(--accent-error);">Không thể tải danh sách delisting.</td></tr>`;
+                    return;
+                }
+                const articles = await res.json();
+                tbody.innerHTML = '';
+                
+                if (articles.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:32px; color:var(--text-secondary);">Không tìm thấy thông báo delist nào.</td></tr>`;
+                    return;
+                }
+
+                articles.forEach((art, idx) => {
+                    const tr = document.createElement('tr');
+                    
+                    // Format date
+                    const date = new Date(art.releaseDate);
+                    const dateStr = date.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false });
+                    
+                    const originalUrl = `https://www.binance.com/en/support/announcement/${art.code}`;
+
+                    tr.innerHTML = `
+                        <td style="color: var(--text-secondary); font-weight: 600;">#${idx + 1}</td>
+                        <td style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            <span title="${art.title}"><b>${art.title}</b></span>
+                        </td>
+                        <td style="color: var(--text-secondary); font-size: 0.85rem;">${dateStr}</td>
+                        <td style="text-align: center;">
+                            <a href="${originalUrl}" target="_blank" class="btn btn-outline btn-sm btn-icon-only" title="Xem bài viết gốc" style="padding: 4px 8px; border-color: rgba(255,255,255,0.08);">
+                                🌐 Link
+                            </a>
+                        </td>
+                        <td style="text-align: center;">
+                            <button class="btn btn-outline btn-sm" onclick="explainDelisting('${art.code}', '${art.title}')" style="padding: 4px 10px; font-size: 0.8rem; border-color: rgba(255, 23, 68, 0.3); color: #fff;">
+                                ✨ AI Phân tích
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (err) {
+                console.error("Error fetching delisting announcements:", err);
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:32px; color:var(--accent-error);">Lỗi kết nối máy chủ.</td></tr>`;
+            }
+        }
+
+        // Use Gemini AI to explain delisting detail
+        async function explainDelisting(code, title) {
+            const badge = document.getElementById('ai-delist-badge');
+            const container = document.getElementById('ai-delist-container');
+            
+            badge.innerText = "ANALYZING";
+            badge.style.display = 'inline-flex';
+            
+            // Loading Animation
+            container.innerHTML = `
+                <div style="text-align: center; padding-top: 80px; color: var(--accent-error);">
+                    <div style="font-size: 1.5rem; animation: pulse 1.8s infinite; margin-bottom: 12px;">🔮</div>
+                    <p>AI đang tải nội dung bài viết và phân tích lịch trình delist...</p>
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px;">Quá trình này có thể mất 5-10 giây.</p>
+                </div>
+            `;
+
+            try {
+                const res = await fetch(`/api/explain_delist/${code}`);
+                if (!res.ok) {
+                    container.innerHTML = `
+                        <div style="color: var(--accent-error); text-align: center; padding-top: 80px;">
+                            <p style="font-size: 1.5rem; margin-bottom: 12px;">⚠️</p>
+                            Không thể tải phân tích của AI. Hãy đảm bảo API Key đã được cấu hình trong gemini_key.txt.
+                        </div>`;
+                    badge.innerText = "ERROR";
+                    return;
+                }
+                const data = await res.json();
+                
+                badge.innerText = "SUCCESS";
+                if (window.marked) {
+                    container.innerHTML = marked.parse(data.analysis);
+                } else {
+                    container.innerText = data.analysis;
+                }
+            } catch (err) {
+                console.error("Error generating delisting explanation:", err);
+                container.innerHTML = `
+                    <div style="color: var(--accent-error); text-align: center; padding-top: 80px;">
+                        <p style="font-size: 1.5rem; margin-bottom: 12px;">🔌</p>
+                        Lỗi kết nối đến máy chủ.
+                    </div>`;
+                badge.innerText = "ERROR";
             }
         }
 

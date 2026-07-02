@@ -4,7 +4,7 @@ Bin Spot Monitor & Watchlist Web Dashboard
 Provides a web interface to control the Binance Spot H1 anomaly detector
 and run/manage the 3 existing watchlist scripts.
 
-Version: 2.5.8
+Version: 2.5.9
 """
 
 import asyncio
@@ -30,7 +30,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Logger Setup
 logger = logging.getLogger("Dashboard")
 
-app = FastAPI(title="Binance Spot Monitor Dashboard", version="2.5.8")
+app = FastAPI(title="Binance Spot Monitor Dashboard", version="2.5.9")
 
 # Bot Instance
 monitor_instance = BinanceSpotMonitor()
@@ -184,6 +184,75 @@ async def fetch_coincap_marketcaps():
         
     return COINCAP_CACHE["data"]
 
+# Binance Delisting Announcements Cache
+DELISTING_CACHE = {
+    "data": None,
+    "last_fetched": 0
+}
+
+async def fetch_binance_delistings():
+    now = time.time()
+    # Cache for 10 minutes (600 seconds)
+    if now - DELISTING_CACHE["last_fetched"] < 600 and DELISTING_CACHE["data"] is not None:
+        return DELISTING_CACHE["data"]
+        
+    url = "https://www.binance.com/bapi/composite/v1/public/cms/article/list/query"
+    params = {
+        "type": 1,
+        "catalogId": 161,
+        "pageNo": 1,
+        "pageSize": 20
+    }
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params=params, timeout=10) as resp:
+                if resp.status == 200:
+                    res_json = await resp.json()
+                    if res_json.get("code") == "000000":
+                        catalogs = res_json.get("data", {}).get("catalogs", [])
+                        articles = []
+                        if catalogs:
+                            articles = catalogs[0].get("articles", [])
+                        DELISTING_CACHE["data"] = articles
+                        DELISTING_CACHE["last_fetched"] = now
+                        logger.info("Fetched Binance delisting announcements successfully.")
+                        return articles
+                    else:
+                        logger.error(f"Binance BAPI returned error code: {res_json.get('code')}")
+                else:
+                    logger.error(f"Binance BAPI returned status {resp.status}")
+    except Exception as e:
+        logger.error(f"Error fetching Binance delistings: {e}")
+        
+    return DELISTING_CACHE["data"] or []
+
+def extract_text_from_node(node):
+    if not node:
+        return ""
+    text = ""
+    if node.get("node") == "text":
+        text += node.get("text", "")
+    
+    if "child" in node:
+        for child in node["child"]:
+            text += extract_text_from_node(child)
+            
+    if node.get("node") == "element" and node.get("tag") in ["p", "h1", "h2", "h3", "h4", "div", "li", "tr", "br"]:
+        text += "\n"
+    return text
+
+def parse_article_body(body_str):
+    if not body_str:
+        return ""
+    try:
+        body_data = json.loads(body_str)
+        text = extract_text_from_node(body_data)
+        text = text.replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+        return text
+    except Exception as e:
+        logger.error(f"Error parsing article body JSON: {e}")
+        return body_str
+
 # REST APIs
 
 @app.get("/api/top_gainers")
@@ -312,7 +381,7 @@ async def explain_gainer(symbol: str):
     
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(gemini_url, json=payload, timeout=30) as resp:
+            async with session.post(gemini_url, json=payload, timeout=120) as resp:
                 if resp.status != 200:
                     error_text = await resp.text()
                     logger.error(f"Gemini API returned status {resp.status}: {error_text}")
@@ -355,7 +424,7 @@ async def get_status():
             for k, v in script_processes.items()
         },
         "alerts_count": len(monitor_instance.alerts_history),
-        "version": "2.5.8"
+        "version": "2.5.9"
     }
 
 @app.get("/api/config")
@@ -549,6 +618,113 @@ async def download_watchlist(name: str):
         raise HTTPException(status_code=404, detail="Watchlist text file not generated yet. Run the bot first.")
         
     return FileResponse(path=filename, filename=script_processes[name]["output_txt"], media_type="text/plain")
+
+@app.get("/api/delisting")
+async def get_delisting():
+    articles = await fetch_binance_delistings()
+    return articles
+
+@app.get("/api/explain_delist/{article_code}")
+async def explain_delist(article_code: str):
+    gemini_key = ""
+    key_file = os.path.join(BASE_DIR, "gemini_key.txt")
+    if os.path.exists(key_file):
+        try:
+            with open(key_file, "r", encoding="utf-8") as f:
+                gemini_key = f.read().strip()
+        except Exception as e:
+            logger.error(f"Error reading gemini_key.txt: {e}")
+            
+    if not gemini_key:
+        gemini_key = os.environ.get("GEMINI_API_KEY", "")
+        
+    if not gemini_key:
+        raise HTTPException(status_code=500, detail="Gemini API Key is not configured. Please create gemini_key.txt.")
+
+    detail_url = "https://www.binance.com/bapi/composite/v1/public/cms/article/detail/query"
+    params = {
+        "articleCode": article_code
+    }
+    
+    title = ""
+    clean_text = ""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(detail_url, params=params, timeout=15) as resp:
+                if resp.status == 200:
+                    res_json = await resp.json()
+                    if res_json.get("code") == "000000" and res_json.get("data"):
+                        article_data = res_json["data"]
+                        title = article_data.get("title", "")
+                        body_str = article_data.get("body", "")
+                        clean_text = parse_article_body(body_str)
+                    else:
+                        raise HTTPException(status_code=400, detail=f"Failed to load article detail: {res_json.get('message')}")
+                else:
+                    raise HTTPException(status_code=resp.status, detail="Failed to fetch article detail from Binance.")
+    except Exception as e:
+        logger.error(f"Error loading article detail for {article_code}: {e}")
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+    if not clean_text:
+        clean_text = "Không tải được nội dung bài viết. Chỉ có tiêu đề thông báo."
+
+    prompt = (
+        f"Hãy phân tích bài viết thông báo delist sau đây từ Binance:\n\n"
+        f"Tiêu đề: {title}\n"
+        f"Nội dung bài viết:\n{clean_text}\n\n"
+        f"Yêu cầu:\n"
+        f"1. Trình bày hoàn toàn bằng tiếng Việt.\n"
+        f"2. Trích xuất danh sách các đồng coin/token bị delist (nêu rõ tên đầy đủ và ký hiệu, ví dụ: NFPrompt Token (NFP)).\n"
+        f"3. Cho biết thời gian delist chính thức (UTC và đổi sang giờ Việt Nam GMT+7).\n"
+        f"4. Liệt kê các cặp giao dịch Spot bị ảnh hưởng trực tiếp (ví dụ: ALCX/USDT, NFP/BTC, v.v.).\n"
+        f"5. Tóm tắt các dịch vụ khác của Binance bị ảnh hưởng và thời gian tương ứng (ví dụ: Binance Futures, Margin, Simple Earn, Deposit/Withdrawal deadline, Auto-Invest, v.v.).\n"
+        f"6. Đưa ra các lưu ý quan trọng và lời khuyên ngắn gọn cho người dùng đang nắm giữ các đồng coin này.\n"
+        f"7. Định dạng câu trả lời bằng Markdown đẹp mắt với tiêu đề rõ ràng, các gạch đầu dòng, bảng biểu (nếu cần) và in đậm thông tin quan trọng."
+    )
+
+    gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_key}"
+    payload = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [
+                    {
+                        "text": prompt
+                    }
+                ]
+            }
+        ]
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(gemini_url, json=payload, timeout=120) as resp:
+                if resp.status != 200:
+                    error_text = await resp.text()
+                    logger.error(f"Gemini API returned status {resp.status}: {error_text}")
+                    raise HTTPException(status_code=500, detail=f"Gemini API error: {resp.status}")
+                
+                res_json = await resp.json()
+                try:
+                    candidates = res_json.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        if parts:
+                            analysis_text = parts[0].get("text", "")
+                            return {"analysis": analysis_text}
+                    
+                    raise ValueError("Empty response structure from Gemini")
+                except Exception as ex:
+                    logger.error(f"Error parsing Gemini response: {ex}. Response JSON: {res_json}")
+                    raise HTTPException(status_code=500, detail="Failed to parse analysis response from Gemini AI.")
+    except Exception as e:
+        logger.error(f"Error explaining delisting {article_code}: {e}", exc_info=True)
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
