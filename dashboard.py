@@ -4,7 +4,7 @@ Bin Spot Monitor & Watchlist Web Dashboard
 Provides a web interface to control the Binance Spot H1 anomaly detector
 and run/manage the 3 existing watchlist scripts.
 
-Version: 2.5.13
+Version: 2.5.14
 """
 
 import asyncio
@@ -31,7 +31,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Logger Setup
 logger = logging.getLogger("Dashboard")
 
-app = FastAPI(title="Binance Spot Monitor Dashboard", version="2.5.13")
+app = FastAPI(title="Binance Spot Monitor Dashboard", version="2.5.14")
 
 # Bot Instance
 monitor_instance = BinanceSpotMonitor()
@@ -628,7 +628,7 @@ async def get_status():
             for k, v in script_processes.items()
         },
         "alerts_count": len(monitor_instance.alerts_history),
-        "version": "2.5.13"
+        "version": "2.5.14"
     }
 
 @app.get("/api/config")
@@ -822,6 +822,49 @@ async def download_watchlist(name: str):
         raise HTTPException(status_code=404, detail="Watchlist text file not generated yet. Run the bot first.")
         
     return FileResponse(path=filename, filename=script_processes[name]["output_txt"], media_type="text/plain")
+
+@app.get("/api/restricted_events")
+async def get_restricted_events():
+    try:
+        url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=10) as resp:
+                if resp.status != 200:
+                    raise HTTPException(status_code=500, detail="Failed to fetch economic calendar.")
+                data = await resp.json()
+        
+        restricted_events = []
+        vietnam_tz = timezone(timedelta(hours=7))
+        now_vn = datetime.now(vietnam_tz)
+        
+        for item in data:
+            if item.get("country") == "USD" and item.get("impact") == "High":
+                date_str = item.get("date")
+                try:
+                    dt = datetime.fromisoformat(date_str)
+                    dt_vn = dt.astimezone(vietnam_tz)
+                except Exception:
+                    continue
+                
+                is_upcoming = dt_vn > now_vn
+                
+                restricted_events.append({
+                    "title": item.get("title"),
+                    "country": item.get("country"),
+                    "date": dt_vn.strftime("%d/%m/%Y"),
+                    "time": dt_vn.strftime("%H:%M"),
+                    "impact": item.get("impact"),
+                    "forecast": item.get("forecast", ""),
+                    "previous": item.get("previous", ""),
+                    "is_upcoming": is_upcoming,
+                    "timestamp": dt_vn.timestamp()
+                })
+        
+        restricted_events.sort(key=lambda x: x["timestamp"])
+        return restricted_events
+    except Exception as e:
+        logger.error(f"Error fetching restricted events: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/delisting")
 async def get_delisting():

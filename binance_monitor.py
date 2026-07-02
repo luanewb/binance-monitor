@@ -4,7 +4,7 @@ Binance Spot H1 Price and Volume Anomaly Monitor Bot
 Scans active USDT spot pairs on H1 timeframe, checks for > 10% price increase
 and > 3x average volume, then alerts via Telegram.
 
-Version: 2.5.13
+Version: 2.5.14
 """
 
 import asyncio
@@ -32,7 +32,7 @@ logger = logging.getLogger("BinanceMonitor")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 ALERTS_FILE = os.path.join(BASE_DIR, "alerts_history.json")
-VERSION = "2.5.13"
+VERSION = "2.5.14"
 
 # Leveraged tokens to exclude
 LEVERAGED_KEYWORDS = ["UPUSDT", "DOWNUSDT", "BULLUSDT", "BEARUSDT"]
