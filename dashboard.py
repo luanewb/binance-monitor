@@ -4,7 +4,7 @@ Bin Spot Monitor & Watchlist Web Dashboard
 Provides a web interface to control the Binance Spot H1 anomaly detector
 and run/manage the 3 existing watchlist scripts.
 
-Version: 2.5.14
+Version: 2.5.15
 """
 
 import asyncio
@@ -31,7 +31,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Logger Setup
 logger = logging.getLogger("Dashboard")
 
-app = FastAPI(title="Binance Spot Monitor Dashboard", version="2.5.14")
+app = FastAPI(title="Binance Spot Monitor Dashboard", version="2.5.15")
 
 # Bot Instance
 monitor_instance = BinanceSpotMonitor()
@@ -628,7 +628,7 @@ async def get_status():
             for k, v in script_processes.items()
         },
         "alerts_count": len(monitor_instance.alerts_history),
-        "version": "2.5.14"
+        "version": "2.5.15"
     }
 
 @app.get("/api/config")
@@ -833,7 +833,7 @@ async def get_restricted_events():
                     raise HTTPException(status_code=500, detail="Failed to fetch economic calendar.")
                 data = await resp.json()
         
-        restricted_events = []
+        grouped_events = {}
         vietnam_tz = timezone(timedelta(hours=7))
         now_vn = datetime.now(vietnam_tz)
         
@@ -846,18 +846,71 @@ async def get_restricted_events():
                 except Exception:
                     continue
                 
-                is_upcoming = dt_vn > now_vn
+                timestamp = dt_vn.timestamp()
+                title = item.get("title", "")
+                forecast = item.get("forecast", "")
+                previous = item.get("previous", "")
                 
-                restricted_events.append({
-                    "title": item.get("title"),
-                    "country": item.get("country"),
+                if timestamp not in grouped_events:
+                    grouped_events[timestamp] = []
+                
+                grouped_events[timestamp].append({
+                    "title": title,
+                    "forecast": forecast,
+                    "previous": previous,
                     "date": dt_vn.strftime("%d/%m/%Y"),
                     "time": dt_vn.strftime("%H:%M"),
-                    "impact": item.get("impact"),
-                    "forecast": item.get("forecast", ""),
-                    "previous": item.get("previous", ""),
-                    "is_upcoming": is_upcoming,
-                    "timestamp": dt_vn.timestamp()
+                    "is_upcoming": dt_vn > now_vn,
+                    "timestamp": timestamp
+                })
+        
+        restricted_events = []
+        for timestamp, events in grouped_events.items():
+            if len(events) == 1:
+                ev = events[0]
+                restricted_events.append({
+                    "title": ev["title"],
+                    "country": "USD",
+                    "date": ev["date"],
+                    "time": ev["time"],
+                    "impact": "High",
+                    "forecast": ev["forecast"],
+                    "previous": ev["previous"],
+                    "is_upcoming": ev["is_upcoming"],
+                    "timestamp": ev["timestamp"]
+                })
+            else:
+                # Find the main event to prioritize and list others in parentheses
+                main_ev = None
+                # 1. Non-Farm Employment Change
+                main_ev = next((ev for ev in events if "Non-Farm" in ev["title"] or "Employment Change" in ev["title"]), None)
+                # 2. CPI
+                if not main_ev:
+                    main_ev = next((ev for ev in events if "CPI" in ev["title"]), None)
+                # 3. FOMC / Interest Rate
+                if not main_ev:
+                    main_ev = next((ev for ev in events if "FOMC" in ev["title"] or "Federal Funds Rate" in ev["title"]), None)
+                # 4. GDP
+                if not main_ev:
+                    main_ev = next((ev for ev in events if "GDP" in ev["title"]), None)
+                # Default to the first event if none matched
+                if not main_ev:
+                    main_ev = events[0]
+                
+                # Combine remaining titles
+                other_titles = [ev["title"] for ev in events if ev != main_ev]
+                combined_title = f"{main_ev['title']} ({', '.join(other_titles)})"
+                
+                restricted_events.append({
+                    "title": combined_title,
+                    "country": "USD",
+                    "date": main_ev["date"],
+                    "time": main_ev["time"],
+                    "impact": "High",
+                    "forecast": main_ev["forecast"],
+                    "previous": main_ev["previous"],
+                    "is_upcoming": main_ev["is_upcoming"],
+                    "timestamp": main_ev["timestamp"]
                 })
         
         restricted_events.sort(key=lambda x: x["timestamp"])
