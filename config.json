@@ -1,6 +1,6 @@
 {
-  "telegram_token": "",
-  "telegram_chat_id": "",
+  "telegram_token": "8986756914:AAG2dj8r9RuT234iBNM98mUODSsiqY7Ti2w",
+  "telegram_chat_id": "-5308046923",
   "price_threshold_pct": 10.0,
   "volume_multiplier": 3.0,
   "scan_interval_sec": 3600,

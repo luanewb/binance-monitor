@@ -4,7 +4,7 @@ Bin Spot Monitor & Watchlist Web Dashboard
 Provides a web interface to control the Binance Spot H1 anomaly detector
 and run/manage the 3 existing watchlist scripts.
 
-Version: 2.5.11
+Version: 2.5.12
 """
 
 import asyncio
@@ -31,7 +31,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Logger Setup
 logger = logging.getLogger("Dashboard")
 
-app = FastAPI(title="Binance Spot Monitor Dashboard", version="2.5.11")
+app = FastAPI(title="Binance Spot Monitor Dashboard", version="2.5.12")
 
 # Bot Instance
 monitor_instance = BinanceSpotMonitor()
@@ -455,7 +455,7 @@ async def get_status():
             for k, v in script_processes.items()
         },
         "alerts_count": len(monitor_instance.alerts_history),
-        "version": "2.5.11"
+        "version": "2.5.12"
     }
 
 @app.get("/api/config")

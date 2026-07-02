@@ -4,7 +4,7 @@ Binance Spot H1 Price and Volume Anomaly Monitor Bot
 Scans active USDT spot pairs on H1 timeframe, checks for > 10% price increase
 and > 3x average volume, then alerts via Telegram.
 
-Version: 2.5.11
+Version: 2.5.12
 """
 
 import asyncio
@@ -32,7 +32,7 @@ logger = logging.getLogger("BinanceMonitor")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 ALERTS_FILE = os.path.join(BASE_DIR, "alerts_history.json")
-VERSION = "2.5.11"
+VERSION = "2.5.12"
 
 # Leveraged tokens to exclude
 LEVERAGED_KEYWORDS = ["UPUSDT", "DOWNUSDT", "BULLUSDT", "BEARUSDT"]
@@ -51,15 +51,26 @@ class BinanceSpotMonitor:
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                     self.config = json.load(f)
             else:
-                self.config = {
-                    "telegram_token": "",
-                    "telegram_chat_id": "",
-                    "price_threshold_pct": 10.0,
-                    "volume_multiplier": 3.0,
-                    "scan_interval_sec": 300,
-                    "volume_avg_period": 20,
-                    "is_running": False
-                }
+                self.config = {}
+
+            # Use user's requested defaults if empty or missing
+            if not self.config.get("telegram_token"):
+                self.config["telegram_token"] = "8986756914:AAG2dj8r9RuT234iBNM98mUODSsiqY7Ti2w"
+            if not self.config.get("telegram_chat_id"):
+                self.config["telegram_chat_id"] = "-5308046923"
+
+            # Apply other defaults if missing
+            defaults = {
+                "price_threshold_pct": 10.0,
+                "volume_multiplier": 3.0,
+                "scan_interval_sec": 300,
+                "volume_avg_period": 20,
+                "is_running": False
+            }
+            for key, val in defaults.items():
+                if key not in self.config:
+                    self.config[key] = val
+
             logger.debug("Configuration loaded successfully.")
         except Exception as e:
             logger.error(f"Error loading configuration: {e}")
