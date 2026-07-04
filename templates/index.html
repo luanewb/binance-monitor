@@ -853,6 +853,9 @@
                                 <div class="help-text">Only alert on coins with 24-hour trading volume above this threshold.</div>
                             </div>
                             <div class="form-group">
+                                <label for="min_h1_pump_volume">Min Pump H1 Volume (USDT)</label>
+                                <input type="number" id="min_h1_pump_volume" value="1000000" min="0">
+                                <div class="help-text">Only alert when the current H1 pump candle volume is above this threshold.</div>
                             </div>
                         </div>
 
@@ -1007,6 +1010,13 @@
                         </tr>
                     </tbody>
                 </table>
+            </div>
+            <div id="alerts-pagination" style="display:none; align-items:center; justify-content:space-between; gap:16px; margin-top:16px; color:var(--text-secondary);">
+                <div id="alerts-page-info" style="font-size:0.9rem;"></div>
+                <div class="btn-group" style="margin-top:0;">
+                    <button class="btn btn-outline btn-sm" id="alerts-prev-btn" onclick="changeAlertsPage(-1)">Previous</button>
+                    <button class="btn btn-outline btn-sm" id="alerts-next-btn" onclick="changeAlertsPage(1)">Next</button>
+                </div>
             </div>
         </section>
 
@@ -1182,6 +1192,9 @@
         let currentActiveScript = null;
         let logsIntervalId = null;
         let currentTopGainers = [];
+        let currentAlerts = [];
+        let alertsPage = 1;
+        const ALERTS_PER_PAGE = 20;
 
         // Switch dashboard tabs
         function switchView(viewId, element) {
@@ -1344,6 +1357,7 @@
                 document.getElementById('scan_interval_sec').value = config.scan_interval_sec;
                 document.getElementById('volume_avg_period').value = config.volume_avg_period;
                 document.getElementById('min_24h_volume').value = config.min_24h_volume !== undefined ? config.min_24h_volume : 1000000;
+                document.getElementById('min_h1_pump_volume').value = config.min_h1_pump_volume !== undefined ? config.min_h1_pump_volume : 1000000;
 
                 document.getElementById('stats-interval-lbl').innerText = config.scan_interval_sec + 's';
             } catch (err) {
@@ -1362,7 +1376,8 @@
                 volume_multiplier: parseFloat(document.getElementById('volume_multiplier').value),
                 scan_interval_sec: parseInt(document.getElementById('scan_interval_sec').value),
                 volume_avg_period: parseInt(document.getElementById('volume_avg_period').value),
-                min_24h_volume: parseFloat(document.getElementById('min_24h_volume').value)
+                min_24h_volume: parseFloat(document.getElementById('min_24h_volume').value),
+                min_h1_pump_volume: parseFloat(document.getElementById('min_h1_pump_volume').value)
             };
 
             try {
@@ -1479,36 +1494,71 @@
                 const res = await fetch('/api/alerts');
                 if (!res.ok) return;
                 const alerts = await res.json();
+                currentAlerts = alerts;
+                const totalPages = Math.max(1, Math.ceil(currentAlerts.length / ALERTS_PER_PAGE));
+                alertsPage = Math.min(alertsPage, totalPages);
+                renderAlertsPage();
+                return;
 
-                const tbody = document.getElementById('alerts-tbody');
-                tbody.innerHTML = '';
-
-                if (alerts.length === 0) {
-                    tbody.innerHTML = `
-                        <tr>
-                            <td colspan="7" style="text-align:center; padding:32px; color:var(--text-secondary);">No alerts recorded. Ensure the bot is running.</td>
-                        </tr>`;
-                    return;
-                }
-
-                alerts.forEach(alert => {
-                    const tr = document.createElement('tr');
-                    const telBadgeClass = alert.telegram_sent ? 'badge-success' : 'badge-error';
-                    const telBadgeText = alert.telegram_sent ? 'Sent' : 'Failed';
-                    
-                    tr.innerHTML = `
-                        <td><b>#${alert.symbol}</b></td>
-                        <td style="color:var(--text-secondary);">${alert.timestamp}</td>
-                        <td style="color:var(--accent-success); font-weight:600;">+${alert.price_change.toFixed(2)}%</td>
-                        <td>${alert.current_price.toLocaleString()} USDT</td>
-                        <td>${alert.volume.toLocaleString(undefined, {maximumFractionDigits: 2})} USDT</td>
-                        <td>🔥 <b>${alert.volume_ratio.toFixed(2)}x</b></td>
-                        <td><span class="badge ${telBadgeClass}">${telBadgeText}</span></td>
-                    `;
-                    tbody.appendChild(tr);
-                });
             } catch (err) {
                 console.error("Error loading alerts:", err);
+            }
+        }
+
+        function renderAlertsPage() {
+            const tbody = document.getElementById('alerts-tbody');
+            const pagination = document.getElementById('alerts-pagination');
+            const pageInfo = document.getElementById('alerts-page-info');
+            const prevBtn = document.getElementById('alerts-prev-btn');
+            const nextBtn = document.getElementById('alerts-next-btn');
+
+            tbody.innerHTML = '';
+
+            if (currentAlerts.length === 0) {
+                pagination.style.display = 'none';
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align:center; padding:32px; color:var(--text-secondary);">No alerts recorded. Ensure the bot is running.</td>
+                    </tr>`;
+                return;
+            }
+
+            const totalPages = Math.ceil(currentAlerts.length / ALERTS_PER_PAGE);
+            alertsPage = Math.min(Math.max(alertsPage, 1), totalPages);
+            const startIndex = (alertsPage - 1) * ALERTS_PER_PAGE;
+            const endIndex = Math.min(startIndex + ALERTS_PER_PAGE, currentAlerts.length);
+
+            currentAlerts.slice(startIndex, endIndex).forEach(alert => {
+                const tr = document.createElement('tr');
+                const telBadgeClass = alert.telegram_sent ? 'badge-success' : 'badge-error';
+                const telBadgeText = alert.telegram_sent ? 'Sent' : 'Failed';
+
+                tr.innerHTML = `
+                    <td><b>#${alert.symbol}</b></td>
+                    <td style="color:var(--text-secondary);">${alert.timestamp}</td>
+                    <td style="color:var(--accent-success); font-weight:600;">+${alert.price_change.toFixed(2)}%</td>
+                    <td>${alert.current_price.toLocaleString()} USDT</td>
+                    <td>${alert.volume.toLocaleString(undefined, {maximumFractionDigits: 2})} USDT</td>
+                    <td><b>${alert.volume_ratio.toFixed(2)}x</b></td>
+                    <td><span class="badge ${telBadgeClass}">${telBadgeText}</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            pagination.style.display = 'flex';
+            pageInfo.innerText = `Showing ${startIndex + 1}-${endIndex} of ${currentAlerts.length} alerts - Page ${alertsPage}/${totalPages}`;
+            prevBtn.disabled = alertsPage === 1;
+            nextBtn.disabled = alertsPage === totalPages;
+            prevBtn.style.opacity = prevBtn.disabled ? '0.45' : '1';
+            nextBtn.style.opacity = nextBtn.disabled ? '0.45' : '1';
+        }
+
+        function changeAlertsPage(delta) {
+            const totalPages = Math.max(1, Math.ceil(currentAlerts.length / ALERTS_PER_PAGE));
+            const nextPage = Math.min(Math.max(alertsPage + delta, 1), totalPages);
+            if (nextPage !== alertsPage) {
+                alertsPage = nextPage;
+                renderAlertsPage();
             }
         }
 
@@ -1519,6 +1569,7 @@
                 const res = await fetch('/api/alerts/clear', { method: 'POST' });
                 if (res.ok) {
                     showToast("Alert history cleared.");
+                    alertsPage = 1;
                     fetchAlerts();
                     fetchStatus();
                 } else {

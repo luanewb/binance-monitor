@@ -65,6 +65,8 @@ class BinanceSpotMonitor:
                 "volume_multiplier": 3.0,
                 "scan_interval_sec": 300,
                 "volume_avg_period": 20,
+                "min_24h_volume": 1000000.0,
+                "min_h1_pump_volume": 1000000.0,
                 "is_running": False
             }
             for key, val in defaults.items():
@@ -175,7 +177,9 @@ class BinanceSpotMonitor:
 
     async def fetch_kline_data(self, session, symbol, semaphore):
         """Fetches the last N H1 candles for a specific symbol."""
-        limit = self.config.get("volume_avg_period", 20) + 1  # Completed candles + current candle
+        # Need one extra candle when scanning on H1 close: current new candle
+        # plus the just-closed candle and its completed volume baseline.
+        limit = self.config.get("volume_avg_period", 20) + 2
         url = "https://api.binance.com/api/v3/klines"
         params = {
             "symbol": symbol,
@@ -209,6 +213,7 @@ class BinanceSpotMonitor:
         volume_multiplier = self.config.get("volume_multiplier", 3.0)
         period = self.config.get("volume_avg_period", 20)
         min_24h_volume = self.config.get("min_24h_volume", 1000000.0)
+        min_h1_pump_volume = self.config.get("min_h1_pump_volume", 1000000.0)
         
         connector = aiohttp.TCPConnector(limit=50)
         async with aiohttp.ClientSession(connector=connector) as session:
@@ -237,9 +242,18 @@ class BinanceSpotMonitor:
                 
                 scanned_count += 1
                 
-                # Split into completed candles and the current ongoing candle
-                completed_candles = klines[:-1]
-                current_candle = klines[-1]
+                # When the bot is aligned to H1 close (scan_interval_sec >= 3600),
+                # Binance already returns a new current candle. Evaluate the
+                # just-closed candle instead, otherwise H1 pumps are missed.
+                use_closed_h1 = self.config.get("scan_interval_sec", 300) >= 3600
+                if use_closed_h1:
+                    if len(klines) < period + 2:
+                        continue
+                    completed_candles = klines[-(period + 2):-2]
+                    current_candle = klines[-2]
+                else:
+                    completed_candles = klines[-(period + 1):-1]
+                    current_candle = klines[-1]
                 
                 # Extract details
                 candle_open_time_ms = current_candle[0]
@@ -251,6 +265,9 @@ class BinanceSpotMonitor:
                 low_price = float(current_candle[3])
                 current_price = float(current_candle[4])
                 current_volume = float(current_candle[7])  # Quote asset volume (USDT)
+
+                if current_volume < min_h1_pump_volume:
+                    continue
                 
                 # Calculate average volume of completed candles
                 completed_volumes = [float(c[7]) for c in completed_candles[-period:]]

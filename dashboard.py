@@ -53,6 +53,7 @@ class ConfigModel(BaseModel):
     scan_interval_sec: int
     volume_avg_period: int
     min_24h_volume: float
+    min_h1_pump_volume: float = 1000000.0
 
 # Background loop for Spot Monitor Bot
 async def monitor_loop():
