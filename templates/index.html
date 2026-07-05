@@ -859,6 +859,31 @@
                             </div>
                         </div>
 
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="m5_d1_pump_enabled">Enable M5 vs D1 Pump Bot</label>
+                                <input type="checkbox" id="m5_d1_pump_enabled" checked>
+                                <div class="help-text">Scan closed M5 candles and compare quote volume against the previous closed D1 candle.</div>
+                            </div>
+                            <div class="form-group">
+                                <label for="m5_price_threshold_pct">M5 Pump Threshold (%)</label>
+                                <input type="number" id="m5_price_threshold_pct" step="0.1" value="10.0" min="0">
+                                <div class="help-text">Trigger when the closed M5 candle pumps above this percent.</div>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="m5_d1_volume_multiplier">M5 / D1 Volume Ratio (x)</label>
+                                <input type="number" id="m5_d1_volume_multiplier" step="0.1" value="1.0" min="0">
+                                <div class="help-text">1.0 means M5 quote volume must be greater than previous D1 quote volume.</div>
+                            </div>
+                            <div class="form-group">
+                                <label>M5 Scan Timing</label>
+                                <div class="help-text">Runs automatically at each M5 candle close, with a 10 second delay for Binance finalization.</div>
+                            </div>
+                        </div>
+
                         <div class="btn-group">
                             <button type="submit" class="btn btn-primary">Save Settings</button>
                             <button type="button" class="btn btn-outline" onclick="testTelegram()">Test Connection</button>
@@ -999,8 +1024,8 @@
                             <th>Time (UTC)</th>
                             <th>Price Change</th>
                             <th>Current Price</th>
-                            <th>H1 Volume</th>
-                            <th>Volume Multiplier</th>
+                            <th>Volume</th>
+                            <th>Volume Ratio</th>
                             <th>Telegram Status</th>
                         </tr>
                     </thead>
@@ -1358,6 +1383,9 @@
                 document.getElementById('volume_avg_period').value = config.volume_avg_period;
                 document.getElementById('min_24h_volume').value = config.min_24h_volume !== undefined ? config.min_24h_volume : 1000000;
                 document.getElementById('min_h1_pump_volume').value = config.min_h1_pump_volume !== undefined ? config.min_h1_pump_volume : 1000000;
+                document.getElementById('m5_d1_pump_enabled').checked = config.m5_d1_pump_enabled !== undefined ? config.m5_d1_pump_enabled : true;
+                document.getElementById('m5_price_threshold_pct').value = config.m5_price_threshold_pct !== undefined ? config.m5_price_threshold_pct : 10.0;
+                document.getElementById('m5_d1_volume_multiplier').value = config.m5_d1_volume_multiplier !== undefined ? config.m5_d1_volume_multiplier : 1.0;
 
                 document.getElementById('stats-interval-lbl').innerText = config.scan_interval_sec + 's';
             } catch (err) {
@@ -1377,7 +1405,11 @@
                 scan_interval_sec: parseInt(document.getElementById('scan_interval_sec').value),
                 volume_avg_period: parseInt(document.getElementById('volume_avg_period').value),
                 min_24h_volume: parseFloat(document.getElementById('min_24h_volume').value),
-                min_h1_pump_volume: parseFloat(document.getElementById('min_h1_pump_volume').value)
+                min_h1_pump_volume: parseFloat(document.getElementById('min_h1_pump_volume').value),
+                m5_d1_pump_enabled: document.getElementById('m5_d1_pump_enabled').checked,
+                m5_price_threshold_pct: parseFloat(document.getElementById('m5_price_threshold_pct').value),
+                m5_d1_volume_multiplier: parseFloat(document.getElementById('m5_d1_volume_multiplier').value),
+                m5_d1_scan_interval_sec: 300
             };
 
             try {
@@ -1534,12 +1566,12 @@
                 const telBadgeText = alert.telegram_sent ? 'Sent' : 'Failed';
 
                 tr.innerHTML = `
-                    <td><b>#${alert.symbol}</b></td>
+                    <td><b>#${alert.symbol}</b><br><span style="color:var(--text-secondary); font-size:0.8rem;">${alert.timeframe || 'H1'}</span></td>
                     <td style="color:var(--text-secondary);">${alert.timestamp}</td>
                     <td style="color:var(--accent-success); font-weight:600;">+${alert.price_change.toFixed(2)}%</td>
                     <td>${alert.current_price.toLocaleString()} USDT</td>
                     <td>${alert.volume.toLocaleString(undefined, {maximumFractionDigits: 2})} USDT</td>
-                    <td><b>${alert.volume_ratio.toFixed(2)}x</b></td>
+                    <td><b>${(alert.volume_ratio || 0).toFixed(2)}x</b></td>
                     <td><span class="badge ${telBadgeClass}">${telBadgeText}</span></td>
                 `;
                 tbody.appendChild(tr);

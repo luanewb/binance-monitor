@@ -24,18 +24,19 @@ from pydantic import BaseModel
 
 # Add local path to import binance_monitor
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from binance_monitor import BinanceSpotMonitor, CONFIG_FILE, ALERTS_FILE
+from binance_monitor import BinanceSpotMonitor, CONFIG_FILE, ALERTS_FILE, VERSION, seconds_until_next_m5_close
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Logger Setup
 logger = logging.getLogger("Dashboard")
 
-app = FastAPI(title="Binance Spot Monitor Dashboard", version="2.5.15")
+app = FastAPI(title="Binance Spot Monitor Dashboard", version=VERSION)
 
 # Bot Instance
 monitor_instance = BinanceSpotMonitor()
 monitor_task: Optional[asyncio.Task] = None
+m5_monitor_task: Optional[asyncio.Task] = None
 
 # Script status tracker
 script_processes = {
@@ -54,6 +55,10 @@ class ConfigModel(BaseModel):
     volume_avg_period: int
     min_24h_volume: float
     min_h1_pump_volume: float = 1000000.0
+    m5_d1_pump_enabled: bool = True
+    m5_price_threshold_pct: float = 10.0
+    m5_d1_volume_multiplier: float = 1.0
+    m5_d1_scan_interval_sec: int = 300
 
 # Background loop for Spot Monitor Bot
 async def monitor_loop():
@@ -95,20 +100,57 @@ async def monitor_loop():
             logger.error(f"Error in monitor loop: {e}")
             await asyncio.sleep(10)
 
+# Background loop for M5 pump vs previous D1 volume bot
+async def m5_monitor_loop():
+    logger.info("M5/D1 pump monitor loop started in background.")
+    while True:
+        try:
+            monitor_instance.load_config()
+            is_running = monitor_instance.config.get("is_running", False)
+            is_enabled = monitor_instance.config.get("m5_d1_pump_enabled", True)
+
+            if is_running and is_enabled:
+                logger.info("Triggering M5/D1 Pump Scan...")
+                await monitor_instance.scan_m5_d1_pump_symbols()
+                sleep_duration = seconds_until_next_m5_close()
+                logger.info(f"M5 close alignment active: next scan scheduled in {sleep_duration}s (at next 5m close + 10s)")
+            else:
+                sleep_duration = 10
+
+            for _ in range(max(1, int(sleep_duration))):
+                await asyncio.sleep(1)
+                current_active = monitor_instance.config.get("is_running", False)
+                current_enabled = monitor_instance.config.get("m5_d1_pump_enabled", True)
+                if current_active != is_running or current_enabled != is_enabled:
+                    break
+        except asyncio.CancelledError:
+            logger.info("M5/D1 pump monitor loop cancelled.")
+            break
+        except Exception as e:
+            logger.error(f"Error in M5/D1 pump monitor loop: {e}")
+            await asyncio.sleep(10)
+
 @app.on_event("startup")
 async def startup_event():
-    global monitor_task
+    global monitor_task, m5_monitor_task
     # Start monitor task in background
     monitor_task = asyncio.create_task(monitor_loop())
+    m5_monitor_task = asyncio.create_task(m5_monitor_loop())
     logger.info("FastAPI dashboard started.")
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    global monitor_task
+    global monitor_task, m5_monitor_task
     if monitor_task:
         monitor_task.cancel()
         try:
             await monitor_task
+        except asyncio.CancelledError:
+            pass
+    if m5_monitor_task:
+        m5_monitor_task.cancel()
+        try:
+            await m5_monitor_task
         except asyncio.CancelledError:
             pass
     logger.info("FastAPI dashboard stopped.")
@@ -629,7 +671,7 @@ async def get_status():
             for k, v in script_processes.items()
         },
         "alerts_count": len(monitor_instance.alerts_history),
-        "version": "2.5.15"
+        "version": VERSION
     }
 
 @app.get("/api/config")
