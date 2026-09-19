@@ -7,5 +7,14 @@
   "volume_avg_period": 20,
   "min_24h_volume": 500000.0,
   "min_h1_pump_volume": 1000000.0,
-  "is_running": true
+  "is_running": true,
+  "m5_d1_pump_enabled": false,
+  "m5_price_threshold_pct": 10.0,
+  "m5_d1_volume_multiplier": 1.0,
+  "m5_d1_scan_interval_sec": 300,
+  "whale_monitor_enabled": true,
+  "whale_min_usdt": 1000000.0,
+  "whale_track_usdt": true,
+  "whale_track_arb": true,
+  "whale_scan_interval_sec": 15
 }

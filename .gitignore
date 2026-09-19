@@ -4,3 +4,7 @@ __pycache__/
 *.log
 *.txt
 !version.txt
+.codegraph/
+.codex/
+alerts_history.json
+arb_whale_history.json

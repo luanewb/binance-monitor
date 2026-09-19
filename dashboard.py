@@ -2,9 +2,9 @@
 """
 Bin Spot Monitor & Watchlist Web Dashboard
 Provides a web interface to control the Binance Spot H1 anomaly detector
-and run/manage the 3 existing watchlist scripts.
+and run/manage the existing watchlist scripts.
 
-Version: 2.5.15
+Version: 2.5.19
 """
 
 import asyncio
@@ -25,6 +25,7 @@ from pydantic import BaseModel
 # Add local path to import binance_monitor
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from binance_monitor import BinanceSpotMonitor, CONFIG_FILE, ALERTS_FILE, VERSION, seconds_until_next_m5_close
+from arb_whale_monitor import ArbitrumWhaleMonitor
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -33,16 +34,22 @@ logger = logging.getLogger("Dashboard")
 
 app = FastAPI(title="Binance Spot Monitor Dashboard", version=VERSION)
 
-# Bot Instance
+# Bot Instances
 monitor_instance = BinanceSpotMonitor()
 monitor_task: Optional[asyncio.Task] = None
 m5_monitor_task: Optional[asyncio.Task] = None
+
+whale_monitor_instance = ArbitrumWhaleMonitor()
+whale_monitor_task: Optional[asyncio.Task] = None
 
 # Script status tracker
 script_processes = {
     "1m_vol_watchlist": {"status": "idle", "file": "1m_vol_watchlist.py", "output_txt": "1m_vol_watchlist.txt", "last_run": None},
     "All_coin_Binance": {"status": "idle", "file": "All_coin_Binance.py", "output_txt": "All_coin_binance.txt", "last_run": None},
-    "Future_Binance": {"status": "idle", "file": "Future_Binance.py", "output_txt": "Future_Binance.txt", "last_run": None}
+    "All_coin_Binance_No_Monitoring": {"status": "idle", "file": "All_coin_Binance_No_Monitoring.py", "output_txt": "All_coin_binance_no_monitoring.txt", "last_run": None},
+    "Future_Binance": {"status": "idle", "file": "Future_Binance.py", "output_txt": "Future_Binance.txt", "last_run": None},
+    "Bid_Ask_Spread_Binance": {"status": "idle", "file": "Bid_Ask_Spread_Binance.py", "output_txt": "Bid_Ask_Spread_Binance.txt", "last_run": None},
+    "arb_whale_monitor": {"status": "idle", "file": "arb_whale_monitor.py", "output_txt": "arb_whale_history.json", "last_run": None}
 }
 
 # Pydantic models for request bodies
@@ -130,17 +137,40 @@ async def m5_monitor_loop():
             logger.error(f"Error in M5/D1 pump monitor loop: {e}")
             await asyncio.sleep(10)
 
+# Background loop for Arbitrum Whale Monitor
+async def whale_monitor_loop():
+    logger.info("Arbitrum Whale Monitor loop started in background.")
+    while True:
+        try:
+            whale_monitor_instance._load_config()
+            is_enabled = whale_monitor_instance.config.get("whale_monitor_enabled", True)
+            if is_enabled:
+                await whale_monitor_instance.run_scan_cycle()
+            interval = int(whale_monitor_instance.config.get("whale_scan_interval_sec", 15))
+            for _ in range(max(1, interval)):
+                await asyncio.sleep(1)
+                curr_enabled = whale_monitor_instance.config.get("whale_monitor_enabled", True)
+                if curr_enabled != is_enabled:
+                    break
+        except asyncio.CancelledError:
+            logger.info("Arbitrum Whale Monitor loop cancelled.")
+            break
+        except Exception as e:
+            logger.error(f"Error in whale_monitor_loop: {e}")
+            await asyncio.sleep(10)
+
 @app.on_event("startup")
 async def startup_event():
-    global monitor_task, m5_monitor_task
-    # Start monitor task in background
+    global monitor_task, m5_monitor_task, whale_monitor_task
+    # Start monitor tasks in background
     monitor_task = asyncio.create_task(monitor_loop())
     m5_monitor_task = asyncio.create_task(m5_monitor_loop())
+    whale_monitor_task = asyncio.create_task(whale_monitor_loop())
     logger.info("FastAPI dashboard started.")
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    global monitor_task, m5_monitor_task
+    global monitor_task, m5_monitor_task, whale_monitor_task
     if monitor_task:
         monitor_task.cancel()
         try:
@@ -151,6 +181,12 @@ async def shutdown_event():
         m5_monitor_task.cancel()
         try:
             await m5_monitor_task
+        except asyncio.CancelledError:
+            pass
+    if whale_monitor_task:
+        whale_monitor_task.cancel()
+        try:
+            await whale_monitor_task
         except asyncio.CancelledError:
             pass
     logger.info("FastAPI dashboard stopped.")
@@ -1105,6 +1141,100 @@ async def explain_delist(article_code: str):
             raise e
         raise HTTPException(status_code=500, detail=str(e))
 
+# Pydantic models for Whale Monitor
+class WhaleConfigModel(BaseModel):
+    whale_monitor_enabled: bool = True
+    whale_min_usdt: float = 1000000.0
+    whale_track_usdt: bool = True
+    whale_track_arb: bool = True
+    whale_scan_interval_sec: int = 15
+
+class CustomLabelModel(BaseModel):
+    address: str
+    name: str
+    wallet_type: str = "whale"
+    exchange: Optional[str] = None
+
+# Whale Monitor Endpoints
+@app.get("/api/whale/status")
+async def get_whale_status():
+    whale_monitor_instance._load_config()
+    conf = whale_monitor_instance.config
+    latest_block = await whale_monitor_instance.get_latest_block()
+    arb_price = await whale_monitor_instance.get_arb_price()
+    
+    # Calculate today's stats
+    today_prefix = (datetime.now(timezone.utc) + timedelta(hours=7)).strftime("%Y-%m-%d")
+    today_txs = [tx for tx in whale_monitor_instance.history if tx.get("timestamp", "").startswith(today_prefix)]
+    today_volume = sum(tx.get("usd_value", 0.0) for tx in today_txs)
+
+    return {
+        "enabled": conf.get("whale_monitor_enabled", True),
+        "min_usdt": conf.get("whale_min_usdt", 1000000.0),
+        "track_usdt": conf.get("whale_track_usdt", True),
+        "track_arb": conf.get("whale_track_arb", True),
+        "scan_interval_sec": conf.get("whale_scan_interval_sec", 15),
+        "latest_block": latest_block,
+        "last_scanned_block": whale_monitor_instance.last_scanned_block,
+        "arb_price": arb_price,
+        "total_detected": len(whale_monitor_instance.history),
+        "today_detected": len(today_txs),
+        "today_volume": today_volume
+    }
+
+@app.post("/api/whale/toggle")
+async def toggle_whale_monitor():
+    whale_monitor_instance._load_config()
+    current = whale_monitor_instance.config.get("whale_monitor_enabled", True)
+    whale_monitor_instance.config["whale_monitor_enabled"] = not current
+    whale_monitor_instance.save_config()
+    logger.info(f"Whale monitor toggled to: {not current}")
+    return {"status": "success", "whale_monitor_enabled": not current}
+
+@app.post("/api/whale/config")
+async def update_whale_config(req: WhaleConfigModel):
+    whale_monitor_instance.config["whale_monitor_enabled"] = req.whale_monitor_enabled
+    whale_monitor_instance.config["whale_min_usdt"] = req.whale_min_usdt
+    whale_monitor_instance.config["whale_track_usdt"] = req.whale_track_usdt
+    whale_monitor_instance.config["whale_track_arb"] = req.whale_track_arb
+    whale_monitor_instance.config["whale_scan_interval_sec"] = req.whale_scan_interval_sec
+    whale_monitor_instance.save_config()
+    return {"status": "success", "message": "Whale configuration updated."}
+
+@app.post("/api/whale/test-alert")
+async def test_whale_alert():
+    success = await whale_monitor_instance.send_test_alert()
+    if success:
+        return {"status": "success", "message": "Tin nhắn cảnh báo mẫu đã được gửi tới Telegram!"}
+    else:
+        raise HTTPException(status_code=500, detail="Không thể gửi tin nhắn Telegram. Vui lòng kiểm tra lại Token và Chat ID.")
+
+@app.get("/api/whale/history")
+async def get_whale_history():
+    # Return newest transactions first, up to 100 items
+    return whale_monitor_instance.history[::-1][:100]
+
+@app.get("/api/whale/labels")
+async def get_whale_labels():
+    labels_list = []
+    for addr, info in whale_monitor_instance.labels.items():
+        labels_list.append({
+            "address": addr,
+            "name": info.get("name"),
+            "type": info.get("type", "whale"),
+            "exchange": info.get("exchange")
+        })
+    labels_list.sort(key=lambda x: (x["type"] != "cex", x["name"]))
+    return labels_list
+
+@app.post("/api/whale/labels")
+async def add_whale_label(req: CustomLabelModel):
+    if not req.address or not req.name:
+        raise HTTPException(status_code=400, detail="Address and name are required.")
+    whale_monitor_instance.save_custom_label(req.address, req.name, req.wallet_type, req.exchange)
+    return {"status": "success", "message": f"Saved label for {req.address}"}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("dashboard:app", host="0.0.0.0", port=8080, reload=False)
+

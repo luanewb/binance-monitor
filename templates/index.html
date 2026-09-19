@@ -751,6 +751,14 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
                 Restricted Events
             </div>
+            <div class="nav-item" onclick="switchView('whale-view', this)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                    <polyline points="2 17 12 22 22 17"></polyline>
+                    <polyline points="2 12 12 17 22 12"></polyline>
+                </svg>
+                Whale ARB Monitor
+            </div>
             <div class="nav-item" onclick="switchView('history-view', this)">
                 <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                 Alert History
@@ -956,7 +964,24 @@
                     </div>
                 </div>
 
-                <!-- Bot 3: Future Binance -->
+                <!-- Bot 3: All Coin Binance without Monitoring tag -->
+                <div class="script-row-card" id="card-All_coin_Binance_No_Monitoring">
+                    <div class="script-info">
+                        <h3 class="script-title">All_coin_Binance_No_Monitoring.py</h3>
+                        <p class="script-desc">Generates a TradingView watchlist containing active Binance Spot USDT pairs, excluding coins tagged Monitoring.</p>
+                        <div class="script-meta">
+                            <span>Status: <b id="status-All_coin_Binance_No_Monitoring">Idle</b></span>
+                            <span>Last Run: <span id="lastrun-All_coin_Binance_No_Monitoring">Never</span></span>
+                        </div>
+                    </div>
+                    <div class="script-actions">
+                        <button class="btn btn-outline btn-sm" onclick="viewWatchlist('All_coin_Binance_No_Monitoring')">Preview TXT</button>
+                        <a href="/api/watchlist/download/All_coin_Binance_No_Monitoring" class="btn btn-outline btn-sm" id="dl-All_coin_Binance_No_Monitoring" style="display:none;">Download</a>
+                        <button class="btn btn-primary btn-sm" id="run-All_coin_Binance_No_Monitoring" onclick="runScript('All_coin_Binance_No_Monitoring')">Run Bot</button>
+                    </div>
+                </div>
+
+                <!-- Bot 4: Future Binance -->
                 <div class="script-row-card" id="card-Future_Binance">
                     <div class="script-info">
                         <h3 class="script-title">Future_Binance.py</h3>
@@ -970,6 +995,23 @@
                         <button class="btn btn-outline btn-sm" onclick="viewWatchlist('Future_Binance')">Preview TXT</button>
                         <a href="/api/watchlist/download/Future_Binance" class="btn btn-outline btn-sm" id="dl-Future_Binance" style="display:none;">Download</a>
                         <button class="btn btn-primary btn-sm" id="run-Future_Binance" onclick="runScript('Future_Binance')">Run Bot</button>
+                    </div>
+                </div>
+
+                <!-- Bot 5: Bid/Ask Spread Binance -->
+                <div class="script-row-card" id="card-Bid_Ask_Spread_Binance">
+                    <div class="script-info">
+                        <h3 class="script-title">Bid_Ask_Spread_Binance.py</h3>
+                        <p class="script-desc">Generates a TradingView watchlist of active Binance Spot USDT pairs with 24h volume above $1M and bid/ask spread of 0.5% or more.</p>
+                        <div class="script-meta">
+                            <span>Status: <b id="status-Bid_Ask_Spread_Binance">Idle</b></span>
+                            <span>Last Run: <span id="lastrun-Bid_Ask_Spread_Binance">Never</span></span>
+                        </div>
+                    </div>
+                    <div class="script-actions">
+                        <button class="btn btn-outline btn-sm" onclick="viewWatchlist('Bid_Ask_Spread_Binance')">Preview TXT</button>
+                        <a href="/api/watchlist/download/Bid_Ask_Spread_Binance" class="btn btn-outline btn-sm" id="dl-Bid_Ask_Spread_Binance" style="display:none;">Download</a>
+                        <button class="btn btn-primary btn-sm" id="run-Bid_Ask_Spread_Binance" onclick="runScript('Bid_Ask_Spread_Binance')">Run Bot</button>
                     </div>
                 </div>
             </div>
@@ -1204,6 +1246,192 @@
             </div>
         </section>
 
+        <!-- View: Arbitrum Whale Monitor -->
+        <section id="whale-view" class="view-section">
+            <div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+                <div>
+                    <h1 class="page-title">Arbitrum Whale Monitor (Cá Mập ARB & USDT)</h1>
+                    <p class="page-subtitle">Theo dõi on-chain các giao dịch nạp, rút sàn CEX và chuyển ví cá mập trên mạng Arbitrum One (>= 1,000,000 USDT) và bắn cảnh báo Telegram.</p>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-outline btn-sm" onclick="testWhaleTelegramAlert()" id="btn-whale-test">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                        Test Gửi Telegram
+                    </button>
+                    <button class="btn btn-primary btn-sm" onclick="fetchWhaleHistory(true)">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                        Làm Mới
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="stats-grid">
+                <div class="stats-card" id="whale-status-card">
+                    <div class="stats-header">
+                        <span>Trạng Thái Bot</span>
+                        <div class="status-badge">
+                            <span class="status-dot" id="whale-status-dot"></span>
+                            <span id="whale-status-label">Đang tải...</span>
+                        </div>
+                    </div>
+                    <div class="stats-val" id="whale-state-text">--</div>
+                    <button class="btn btn-sm btn-primary" id="btn-whale-toggle" onclick="toggleWhaleMonitor()" style="margin-top: 8px;">
+                        Bật/Tắt Bot
+                    </button>
+                </div>
+
+                <div class="stats-card purple">
+                    <div class="stats-header">
+                        <span>Block Arbitrum Mới Nhất</span>
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                    </div>
+                    <div class="stats-val" id="whale-latest-block">--</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary);">Quét đến block: <span id="whale-scanned-block">--</span></div>
+                </div>
+
+                <div class="stats-card">
+                    <div class="stats-header">
+                        <span>Biến Động Hôm Nay</span>
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"></path></svg>
+                    </div>
+                    <div class="stats-val" id="whale-today-count">0</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary);">Tổng biến động đã lưu: <span id="whale-total-count">0</span></div>
+                </div>
+
+                <div class="stats-card">
+                    <div class="stats-header">
+                        <span>Volume Cá Mập Hôm Nay</span>
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                    </div>
+                    <div class="stats-val" id="whale-today-vol">$0</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary);">Giá ARBUSDT: <span id="whale-arb-price">--</span></div>
+                </div>
+            </div>
+
+            <!-- Configuration Form -->
+            <div class="panel-card" style="margin-bottom: 28px;">
+                <div class="panel-header" style="margin-bottom: 20px;">
+                    <div>
+                        <h2 class="panel-title" style="font-size: 1.25rem;">Cấu Hình Ngưỡng & Tham Số Bot Cá Mập</h2>
+                        <p class="panel-desc">Tự động bắt mọi giao dịch trên mạng Arbitrum One vượt ngưỡng giá trị USD chỉ định.</p>
+                    </div>
+                </div>
+                <form id="whale-config-form" onsubmit="saveWhaleConfig(event)">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; margin-bottom: 18px;">
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 6px;">Ngưỡng Cảnh Báo (USDT)</label>
+                            <input type="number" step="50000" id="whale-min-usdt" class="form-control" value="1000000" required style="width: 100%; padding: 10px 14px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 8px; color: #fff;">
+                            <span style="font-size: 0.75rem; color: var(--text-secondary);">Mặc định: 1,000,000 USDT (1M)</span>
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 6px;">Tần Suất Quét (Giây)</label>
+                            <input type="number" min="5" max="300" id="whale-scan-interval" class="form-control" value="15" required style="width: 100%; padding: 10px 14px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 8px; color: #fff;">
+                            <span style="font-size: 0.75rem; color: var(--text-secondary);">Quét block mới mỗi 15 giây</span>
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 10px;">Token Theo Dõi</label>
+                            <div style="display: flex; gap: 16px; margin-top: 6px;">
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: #fff; font-size: 0.9rem;">
+                                    <input type="checkbox" id="whale-track-usdt" checked> USDT (Arbitrum)
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: #fff; font-size: 0.9rem;">
+                                    <input type="checkbox" id="whale-track-arb" checked> ARB Token
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                        <button type="submit" class="btn btn-primary btn-sm">Lưu Cấu Hình</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Recent Whale Transactions Live Table -->
+            <div class="panel-card" style="margin-bottom: 28px;">
+                <div class="panel-header" style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h2 class="panel-title" style="font-size: 1.25rem;">Lịch Sử Biến Động Cá Mập Mới Nhất</h2>
+                        <p class="panel-desc">Danh sách các lệnh nạp/rút CEX và chuyển ví lớn >= 1M USDT được phát hiện trên Arbitrum One.</p>
+                    </div>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase;">
+                                <th style="padding: 12px 14px;">Thời Gian</th>
+                                <th style="padding: 12px 14px;">Hành Động</th>
+                                <th style="padding: 12px 14px;">Tài Sản</th>
+                                <th style="padding: 12px 14px;">Giá Trị (USDT)</th>
+                                <th style="padding: 12px 14px;">Ví Gửi (From)</th>
+                                <th style="padding: 12px 14px;">Ví Nhận (To)</th>
+                                <th style="padding: 12px 14px; text-align: center;">Arbiscan</th>
+                            </tr>
+                        </thead>
+                        <tbody id="whale-tbody">
+                            <tr>
+                                <td colspan="7" style="text-align: center; padding: 32px; color: var(--text-secondary);">
+                                    Đang tải dữ liệu biến động ví cá mập...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Whale & CEX Wallets Manager -->
+            <div class="panel-card">
+                <div class="panel-header" style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <h2 class="panel-title" style="font-size: 1.25rem;">Cơ Sở Dữ Liệu Ví Cá Mập & Ví Sàn CEX</h2>
+                        <p class="panel-desc">Danh sách các ví sàn giao dịch (Binance, OKX, Bybit...) và ví cá mập đã được gắn nhãn để bot nhận diện.</p>
+                    </div>
+                </div>
+                
+                <!-- Add custom label form -->
+                <div style="background: rgba(255,255,255,0.02); padding: 16px; border-radius: 10px; border: 1px dashed var(--border-color); margin-bottom: 18px;">
+                    <h4 style="font-size: 0.95rem; margin-bottom: 12px; color: var(--accent-primary);">+ Thêm Hoặc Đặt Tên Cho Ví Mới</h4>
+                    <div style="display: grid; grid-template-columns: 2fr 1.5fr 1fr auto; gap: 12px; align-items: end;">
+                        <div>
+                            <label style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px;">Địa Chỉ Ví (0x...)</label>
+                            <input type="text" id="custom-wallet-addr" placeholder="0x..." style="width: 100%; padding: 8px 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 6px; color: #fff; font-family: monospace;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px;">Tên Nhãn</label>
+                            <input type="text" id="custom-wallet-name" placeholder="Ví Cá Mập Justin Sun / Binance Deposit..." style="width: 100%; padding: 8px 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 6px; color: #fff;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px;">Loại Ví</label>
+                            <select id="custom-wallet-type" style="width: 100%; padding: 8px 12px; background: #1a2234; border: 1px solid var(--border-color); border-radius: 6px; color: #fff;">
+                                <option value="whale">Ví Cá Mập (Whale)</option>
+                                <option value="cex">Ví Sàn (CEX)</option>
+                                <option value="market_maker">Quỹ / Market Maker</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary btn-sm" onclick="addCustomWhaleLabel()" style="height: 38px;">Lưu Nhãn</button>
+                    </div>
+                </div>
+
+                <div style="max-height: 320px; overflow-y: auto;">
+                    <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">
+                                <th style="padding: 8px 12px;">Tên Nhãn</th>
+                                <th style="padding: 8px 12px;">Địa Chỉ Ví</th>
+                                <th style="padding: 8px 12px;">Loại Ví</th>
+                                <th style="padding: 8px 12px; text-align: right;">Arbiscan</th>
+                            </tr>
+                        </thead>
+                        <tbody id="whale-labels-tbody">
+                            <tr>
+                                <td colspan="4" style="text-align: center; padding: 16px; color: var(--text-secondary);">Đang tải danh sách ví...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
     </main>
 
     <!-- Toast Notification -->
@@ -1239,6 +1467,10 @@
                 fetchDelistingAnnouncements();
             } else if (viewId === 'events-view') {
                 fetchRestrictedEvents();
+            } else if (viewId === 'whale-view') {
+                fetchWhaleStatus();
+                fetchWhaleHistory();
+                fetchWhaleLabels();
             }
         }
 
@@ -1907,6 +2139,262 @@
             }
         }
 
+        // Whale Monitor Functions
+        async function fetchWhaleStatus() {
+            try {
+                const res = await fetch('/api/whale/status');
+                if (!res.ok) return;
+                const data = await res.json();
+                
+                const dot = document.getElementById('whale-status-dot');
+                const label = document.getElementById('whale-status-label');
+                const card = document.getElementById('whale-status-card');
+                const stateText = document.getElementById('whale-state-text');
+                const btnToggle = document.getElementById('btn-whale-toggle');
+
+                if (data.enabled) {
+                    dot.className = 'status-dot active';
+                    label.innerText = 'Đang Hoạt Động';
+                    card.className = 'stats-card running';
+                    stateText.innerText = 'Đang Quét';
+                    stateText.style.color = 'var(--accent-success)';
+                    btnToggle.innerText = 'Tạm Dừng Bot';
+                    btnToggle.className = 'btn btn-sm btn-outline';
+                } else {
+                    dot.className = 'status-dot inactive';
+                    label.innerText = 'Đã Tạm Dừng';
+                    card.className = 'stats-card stopped';
+                    stateText.innerText = 'Tạm Dừng';
+                    stateText.style.color = 'var(--accent-error)';
+                    btnToggle.innerText = 'Bật Bot Quét';
+                    btnToggle.className = 'btn btn-sm btn-primary';
+                }
+
+                document.getElementById('whale-latest-block').innerText = data.latest_block ? data.latest_block.toLocaleString() : '--';
+                document.getElementById('whale-scanned-block').innerText = data.last_scanned_block ? data.last_scanned_block.toLocaleString() : '--';
+                document.getElementById('whale-today-count').innerText = data.today_detected || 0;
+                document.getElementById('whale-total-count').innerText = data.total_detected || 0;
+                document.getElementById('whale-today-vol').innerText = '$' + (data.today_volume || 0).toLocaleString(undefined, {maximumFractionDigits: 0});
+                document.getElementById('whale-arb-price').innerText = '$' + (data.arb_price ? data.arb_price.toFixed(4) : '--');
+
+                // Fill form values if not focused
+                if (document.activeElement !== document.getElementById('whale-min-usdt')) {
+                    document.getElementById('whale-min-usdt').value = data.min_usdt;
+                }
+                if (document.activeElement !== document.getElementById('whale-scan-interval')) {
+                    document.getElementById('whale-scan-interval').value = data.scan_interval_sec;
+                }
+                document.getElementById('whale-track-usdt').checked = data.track_usdt;
+                document.getElementById('whale-track-arb').checked = data.track_arb;
+            } catch (err) {
+                console.error("Error fetching whale status:", err);
+            }
+        }
+
+        async function fetchWhaleHistory(showToastMsg = false) {
+            const tbody = document.getElementById('whale-tbody');
+            try {
+                const res = await fetch('/api/whale/history');
+                if (!res.ok) {
+                    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:24px; color:var(--accent-error);">Lỗi tải lịch sử biến động cá mập.</td></tr>`;
+                    return;
+                }
+                const txs = await res.json();
+                tbody.innerHTML = '';
+
+                if (txs.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:32px; color:var(--text-secondary);">Chưa phát hiện biến động cá mập mới nào vượt ngưỡng. Bot đang chạy quét ngầm trên mạng Arbitrum.</td></tr>`;
+                    if (showToastMsg) showToast("Lịch sử cá mập trống.", true);
+                    return;
+                }
+
+                txs.forEach(tx => {
+                    const tr = document.createElement('tr');
+                    tr.style.borderBottom = '1px solid var(--border-color)';
+
+                    let actionBadge = '';
+                    if (tx.action_type === 'DEPOSIT') {
+                        actionBadge = `<span style="background: rgba(255, 23, 68, 0.15); color: var(--accent-error); border: 1px solid rgba(255, 23, 68, 0.3); font-weight: bold; border-radius: 4px; padding: 3px 8px; font-size: 0.8rem; display: inline-block;">🔴 NẠP LÊN SÀN</span>`;
+                    } else if (tx.action_type === 'WITHDRAWAL') {
+                        actionBadge = `<span style="background: rgba(0, 230, 118, 0.15); color: var(--accent-success); border: 1px solid rgba(0, 230, 118, 0.3); font-weight: bold; border-radius: 4px; padding: 3px 8px; font-size: 0.8rem; display: inline-block;">🟢 RÚT KHỎI SÀN</span>`;
+                    } else {
+                        actionBadge = `<span style="background: rgba(124, 77, 255, 0.15); color: var(--accent-purple); border: 1px solid rgba(124, 77, 255, 0.3); font-weight: bold; border-radius: 4px; padding: 3px 8px; font-size: 0.8rem; display: inline-block;">🔄 CHUYỂN VÍ</span>`;
+                    }
+
+                    const tokenText = tx.token === 'ARB' 
+                        ? `${(tx.amount || 0).toLocaleString(undefined, {maximumFractionDigits: 0})} ARB`
+                        : `${(tx.amount || 0).toLocaleString(undefined, {maximumFractionDigits: 2})} USDT`;
+
+                    const shortFrom = (tx.from_address || '').slice(0, 6) + '...' + (tx.from_address || '').slice(-4);
+                    const shortTo = (tx.to_address || '').slice(0, 6) + '...' + (tx.to_address || '').slice(-4);
+
+                    tr.innerHTML = `
+                        <td style="padding: 12px 14px; font-size: 0.85rem; color: var(--text-secondary); white-space: nowrap;">${tx.timestamp || '-'}</td>
+                        <td style="padding: 12px 14px;">${actionBadge}</td>
+                        <td style="padding: 12px 14px; font-weight: 600; color: #fff;">${tokenText}</td>
+                        <td style="padding: 12px 14px; font-weight: 700; color: var(--accent-primary); font-size: 0.95rem;">$${(tx.usd_value || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                        <td style="padding: 12px 14px; font-size: 0.85rem;">
+                            <div style="font-weight: 600; color: #fff;">${tx.from_name || 'Ví Cá Mập'}</div>
+                            <div style="font-family: monospace; color: var(--text-secondary); font-size: 0.75rem;">${shortFrom}</div>
+                        </td>
+                        <td style="padding: 12px 14px; font-size: 0.85rem;">
+                            <div style="font-weight: 600; color: #fff;">${tx.to_name || 'Ví Cá Mập'}</div>
+                            <div style="font-family: monospace; color: var(--text-secondary); font-size: 0.75rem;">${shortTo}</div>
+                        </td>
+                        <td style="padding: 12px 14px; text-align: center;">
+                            <a href="${tx.arbiscan_url}" target="_blank" class="btn btn-outline btn-sm" style="font-size: 0.75rem; padding: 4px 8px; text-decoration: none;">Xem Tx ↗</a>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+                if (showToastMsg) showToast("Đã làm mới dữ liệu cá mập!", true);
+            } catch (err) {
+                console.error("Error fetching whale history:", err);
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:24px; color:var(--accent-error);">Lỗi kết nối máy chủ.</td></tr>`;
+            }
+        }
+
+        async function toggleWhaleMonitor() {
+            try {
+                const res = await fetch('/api/whale/toggle', { method: 'POST' });
+                if (res.ok) {
+                    const data = await res.json();
+                    showToast(data.whale_monitor_enabled ? "Đã bật Bot Cá Mập Arbitrum!" : "Đã tạm dừng Bot Cá Mập!", true);
+                    fetchWhaleStatus();
+                } else {
+                    showToast("Không thể thay đổi trạng thái bot.", false);
+                }
+            } catch (err) {
+                console.error("Error toggling whale monitor:", err);
+                showToast("Lỗi kết nối máy chủ.", false);
+            }
+        }
+
+        async function saveWhaleConfig(e) {
+            if (e) e.preventDefault();
+            const minUsdt = parseFloat(document.getElementById('whale-min-usdt').value);
+            const interval = parseInt(document.getElementById('whale-scan-interval').value);
+            const trackUsdt = document.getElementById('whale-track-usdt').checked;
+            const trackArb = document.getElementById('whale-track-arb').checked;
+
+            try {
+                const res = await fetch('/api/whale/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        whale_monitor_enabled: true,
+                        whale_min_usdt: minUsdt,
+                        whale_track_usdt: trackUsdt,
+                        whale_track_arb: trackArb,
+                        whale_scan_interval_sec: interval
+                    })
+                });
+                if (res.ok) {
+                    showToast("Đã lưu cấu hình Bot Cá Mập thành công!", true);
+                    fetchWhaleStatus();
+                } else {
+                    showToast("Lỗi khi lưu cấu hình.", false);
+                }
+            } catch (err) {
+                console.error("Error saving whale config:", err);
+                showToast("Lỗi kết nối máy chủ.", false);
+            }
+        }
+
+        async function testWhaleTelegramAlert() {
+            const btn = document.getElementById('btn-whale-test');
+            btn.disabled = true;
+            btn.innerText = "Đang gửi...";
+            try {
+                const res = await fetch('/api/whale/test-alert', { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast(data.message || "Đã gửi tin nhắn mẫu đến Telegram!", true);
+                } else {
+                    showToast(data.detail || "Không thể gửi tin nhắn Telegram.", false);
+                }
+            } catch (err) {
+                console.error("Error sending test whale alert:", err);
+                showToast("Lỗi kết nối máy chủ.", false);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Test Gửi Telegram";
+            }
+        }
+
+        async function fetchWhaleLabels() {
+            const tbody = document.getElementById('whale-labels-tbody');
+            try {
+                const res = await fetch('/api/whale/labels');
+                if (!res.ok) return;
+                const labels = await res.json();
+                tbody.innerHTML = '';
+                labels.forEach(item => {
+                    const tr = document.createElement('tr');
+                    tr.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+                    
+                    let typeBadge = '';
+                    if (item.type === 'cex') {
+                        typeBadge = `<span style="color: var(--accent-error); font-weight: 600;">Ví Sàn CEX</span>`;
+                    } else if (item.type === 'market_maker') {
+                        typeBadge = `<span style="color: var(--accent-purple); font-weight: 600;">Market Maker / Quỹ</span>`;
+                    } else {
+                        typeBadge = `<span style="color: var(--accent-primary); font-weight: 600;">Ví Cá Mập</span>`;
+                    }
+
+                    tr.innerHTML = `
+                        <td style="padding: 8px 12px; font-weight: 600; color: #fff;">${item.name}</td>
+                        <td style="padding: 8px 12px; font-family: monospace; color: var(--text-secondary);">${item.address}</td>
+                        <td style="padding: 8px 12px;">${typeBadge}</td>
+                        <td style="padding: 8px 12px; text-align: right;">
+                            <a href="https://arbiscan.io/address/${item.address}" target="_blank" style="color: var(--accent-primary); text-decoration: none;">Arbiscan ↗</a>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (err) {
+                console.error("Error fetching whale labels:", err);
+            }
+        }
+
+        async function addCustomWhaleLabel() {
+            const addrInput = document.getElementById('custom-wallet-addr');
+            const nameInput = document.getElementById('custom-wallet-name');
+            const typeInput = document.getElementById('custom-wallet-type');
+
+            const addr = addrInput.value.trim();
+            const name = nameInput.value.trim();
+            const type = typeInput.value;
+
+            if (!addr || !name) {
+                showToast("Vui lòng nhập địa chỉ ví và tên nhãn.", false);
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/whale/labels', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        address: addr,
+                        name: name,
+                        wallet_type: type
+                    })
+                });
+                if (res.ok) {
+                    showToast(`Đã lưu nhãn cho ví ${addr.slice(0, 6)}...`, true);
+                    addrInput.value = '';
+                    nameInput.value = '';
+                    fetchWhaleLabels();
+                } else {
+                    showToast("Lỗi khi lưu nhãn ví.", false);
+                }
+            } catch (err) {
+                console.error("Error adding whale label:", err);
+                showToast("Lỗi kết nối máy chủ.", false);
+            }
+        }
+
         // Init and periodic polling
         window.addEventListener('load', () => {
             fetchStatus();
@@ -1920,6 +2408,9 @@
             setInterval(() => {
                 if (document.getElementById('monitor-view').classList.contains('active')) {
                     fetchLogs('monitor');
+                } else if (document.getElementById('whale-view').classList.contains('active')) {
+                    fetchWhaleStatus();
+                    fetchWhaleHistory();
                 }
             }, 8000);
         });
