@@ -4,7 +4,7 @@ Bin Spot Monitor & Watchlist Web Dashboard
 Provides a web interface to control the Binance Spot H1 anomaly detector
 and run/manage the existing watchlist scripts.
 
-Version: 2.5.19
+Version: 2.5.20
 """
 
 import asyncio
@@ -49,6 +49,7 @@ script_processes = {
     "All_coin_Binance_No_Monitoring": {"status": "idle", "file": "All_coin_Binance_No_Monitoring.py", "output_txt": "All_coin_binance_no_monitoring.txt", "last_run": None},
     "Future_Binance": {"status": "idle", "file": "Future_Binance.py", "output_txt": "Future_Binance.txt", "last_run": None},
     "Bid_Ask_Spread_Binance": {"status": "idle", "file": "Bid_Ask_Spread_Binance.py", "output_txt": "Bid_Ask_Spread_Binance.txt", "last_run": None},
+    "USA_coin_Binance": {"status": "idle", "file": "USA_coin_Binance.py", "output_txt": "USA_coin_binance.txt", "last_run": None},
     "arb_whale_monitor": {"status": "idle", "file": "arb_whale_monitor.py", "output_txt": "arb_whale_history.json", "last_run": None}
 }
 

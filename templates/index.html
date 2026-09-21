@@ -1014,6 +1014,23 @@
                         <button class="btn btn-primary btn-sm" id="run-Bid_Ask_Spread_Binance" onclick="runScript('Bid_Ask_Spread_Binance')">Run Bot</button>
                     </div>
                 </div>
+
+                <!-- Bot 6: USA Coin Binance -->
+                <div class="script-row-card" id="card-USA_coin_Binance">
+                    <div class="script-info">
+                        <h3 class="script-title">USA_coin_Binance.py</h3>
+                        <p class="script-desc">Generates a TradingView watchlist containing US-origin and US-founded crypto projects trading on Binance Spot.</p>
+                        <div class="script-meta">
+                            <span>Status: <b id="status-USA_coin_Binance">Idle</b></span>
+                            <span>Last Run: <span id="lastrun-USA_coin_Binance">Never</span></span>
+                        </div>
+                    </div>
+                    <div class="script-actions">
+                        <button class="btn btn-outline btn-sm" onclick="viewWatchlist('USA_coin_Binance')">Preview TXT</button>
+                        <a href="/api/watchlist/download/USA_coin_Binance" class="btn btn-outline btn-sm" id="dl-USA_coin_Binance" style="display:none;">Download</a>
+                        <button class="btn btn-primary btn-sm" id="run-USA_coin_Binance" onclick="runScript('USA_coin_Binance')">Run Bot</button>
+                    </div>
+                </div>
             </div>
 
             <!-- Terminal output and text preview grid -->

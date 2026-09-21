@@ -5,7 +5,7 @@ Monitors Arbitrum One blockchain for large USDT and ARB token transfers (>= 1,00
 Identifies CEX deposits, CEX withdrawals, and whale-to-whale transfers,
 then sends real-time formatted alerts to Telegram.
 
-Version: 2.5.19
+Version: 2.5.20
 """
 
 import asyncio

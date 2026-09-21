@@ -3,7 +3,7 @@
 Binance Spot Price and Volume Anomaly Monitor Bot
 Scans active USDT spot pairs on H1 and M5 timeframes, then alerts via Telegram.
 
-Version: 2.5.19
+Version: 2.5.20
 """
 
 import asyncio
@@ -33,7 +33,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 ALERTS_FILE = os.path.join(BASE_DIR, "alerts_history.json")
 ALERTS_LOCK_FILE = f"{ALERTS_FILE}.lock"
-VERSION = "2.5.19"
+VERSION = "2.5.20"
 
 # Leveraged tokens to exclude
 LEVERAGED_KEYWORDS = ["UPUSDT", "DOWNUSDT", "BULLUSDT", "BEARUSDT"]

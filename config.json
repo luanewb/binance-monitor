@@ -12,7 +12,7 @@
   "m5_price_threshold_pct": 10.0,
   "m5_d1_volume_multiplier": 1.0,
   "m5_d1_scan_interval_sec": 300,
-  "whale_monitor_enabled": true,
+  "whale_monitor_enabled": false,
   "whale_min_usdt": 1000000.0,
   "whale_track_usdt": true,
   "whale_track_arb": true,
